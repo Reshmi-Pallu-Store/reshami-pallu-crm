@@ -27,12 +27,12 @@ export async function processQueueAsync() {
         const processingItem = { ...item, status: "processing", startedAt: new Date().toISOString() };
         await db.hset("media:queue", { [item.id]: JSON.stringify(processingItem) });
 
-        const filename = path.basename(item.path);
-        const absoluteRawPath = path.join(process.cwd(), "tmp/uploads", filename);
+        const absoluteRawPath = item.path;
         const ext = item.type === "image" ? ".webp" : ".mp4";
+        const dir = path.dirname(absoluteRawPath);
+        const filename = path.basename(absoluteRawPath);
         const optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
-        const relativeOptimizedPath = `tmp/uploads/${optimizedFilename}`;
-        const absoluteOptimizedPath = path.join(process.cwd(), "tmp/uploads", optimizedFilename);
+        const absoluteOptimizedPath = path.join(dir, optimizedFilename);
 
         try {
           console.log(`[Media Worker] Optimizing queued item ${item.id} (${item.type})...`);
@@ -73,7 +73,7 @@ export async function processQueueAsync() {
             status: "completed",
             shopifyId: result.id,
             shopifyUrl: result.url,
-            optimizedPath: relativeOptimizedPath,
+            optimizedPath: absoluteOptimizedPath,
             completedAt: new Date().toISOString()
           };
           await db.hset("media:queue", { [item.id]: JSON.stringify(completedItem) });

@@ -317,7 +317,7 @@ export default function AddProductPage() {
           occasion: finalOccasion,
           region: finalRegion,
           blouseIncluded,
-          blouseLength,
+          blouseLength: blouseIncluded ? blouseLength : "",
           washCare,
           shortVideo: video ? { id: video.id, url: video.url } : undefined,
           foundersExclusive
@@ -621,7 +621,13 @@ export default function AddProductPage() {
                 {/* Blouse Length */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Blouse Length</label>
-                  <input type="text" value={blouseLength} onChange={(e) => setBlouseLength(e.target.value)} className="glass-input" />
+                  <input 
+                    type="text" 
+                    value={blouseIncluded ? blouseLength : "N/A"} 
+                    onChange={(e) => setBlouseLength(e.target.value)} 
+                    disabled={!blouseIncluded}
+                    className={`glass-input ${!blouseIncluded ? "bg-[#1A1A1A]/5 text-[#1A1A1A]/40 cursor-not-allowed border-[#1A1A1A]/10 font-semibold" : ""}`} 
+                  />
                 </div>
 
                 {/* Wash Care */}

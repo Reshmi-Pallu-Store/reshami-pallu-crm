@@ -20,8 +20,7 @@ export async function GET(req: NextRequest) {
     }
 
     const item = typeof itemStr === "string" ? JSON.parse(itemStr) : itemStr;
-    const filename = path.basename(item.path);
-    const absolutePath = path.join(process.cwd(), "tmp/uploads", filename);
+    const absolutePath = item.path;
 
     try {
       const fileBuffer = await fs.readFile(absolutePath);

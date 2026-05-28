@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { promises as fs } from "fs";
 import path from "path";
+import os from "os";
 import { db } from "@/lib/db";
 import { processQueueAsync } from "@/lib/media-worker";
 
@@ -26,13 +27,12 @@ export async function POST(req: NextRequest) {
 
     const mediaId = "media_" + Math.random().toString(36).substring(2, 11);
     
-    // Save raw file on local disk temporarily
-    const uploadDir = path.join(process.cwd(), "tmp/uploads");
+    // Save raw file on OS temp disk (completely outside Next.js project root to prevent watch loops)
+    const uploadDir = path.join(os.tmpdir(), "reshami-pallu-uploads");
     await fs.mkdir(uploadDir, { recursive: true });
 
     const ext = path.extname(file.name) || (file.type.startsWith("video/") ? ".mp4" : ".jpg");
-    const relativePath = `tmp/uploads/${mediaId}${ext}`;
-    const absolutePath = path.join(process.cwd(), relativePath);
+    const absolutePath = path.join(uploadDir, `${mediaId}${ext}`);
 
     const buffer = Buffer.from(await file.arrayBuffer());
     await fs.writeFile(absolutePath, buffer);
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
     // Register queue metadata inside Upstash Redis hash
     const queueItem = {
       id: mediaId,
-      path: relativePath,
+      path: absolutePath, // Save the absolute path directly
       status: "queued",
       type: file.type.startsWith("video/") ? "video" : "image",
       originalName: file.name,

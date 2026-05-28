@@ -17,6 +17,9 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "Reshami Pallu CRM",
   description: "Private administrative dashboard and inventory manager for Mrinalini Singh.",
+  icons: {
+    icon: "/logo.jpg",
+  },
 };
 
 export default function RootLayout({

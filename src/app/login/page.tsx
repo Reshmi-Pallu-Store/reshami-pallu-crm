@@ -47,9 +47,11 @@ export default function LoginPage() {
 
         <div className="flex flex-col items-center text-center mb-8">
           {/* Brand Emblem */}
-          <div className="w-14 h-14 rounded-full bg-[#4A154B] flex items-center justify-center shadow-lg mb-4 text-[#FAF8F5]">
-            <Sparkles size={24} />
-          </div>
+          <img 
+            src="/logo.jpg" 
+            alt="Reshami Pallu Logo" 
+            className="w-16 h-16 rounded-full object-cover shadow-lg mb-4 border border-[#4A154B]/10" 
+          />
           
           <h1 className="text-2xl sm:text-3xl font-display font-bold text-[#4A154B] leading-tight">
             Reshami Pallu

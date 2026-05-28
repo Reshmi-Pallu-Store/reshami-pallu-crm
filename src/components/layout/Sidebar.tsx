@@ -79,9 +79,11 @@ export default function Sidebar() {
         {/* Brand Header */}
         <div className="p-6 border-b border-[#4A154B]/10 flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#4A154B] flex items-center justify-center text-white">
-              <Sparkles size={16} />
-            </div>
+            <img 
+              src="/logo.jpg" 
+              alt="Reshami Pallu" 
+              className="w-8 h-8 rounded-full object-cover border border-[#4A154B]/10 shadow-sm" 
+            />
             <div>
               <span className="font-display font-bold text-[#4A154B] text-lg block leading-none">
                 Reshami Pallu
@@ -105,7 +107,7 @@ export default function Sidebar() {
         {/* Navigation Links */}
         <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && !(item.href === "/products" && pathname === "/products/add"));
             const Icon = item.icon;
 
             return (
@@ -132,9 +134,11 @@ export default function Sidebar() {
         <div className="p-4 border-t border-[#4A154B]/10 bg-[#FAF8F5]/50 flex flex-col gap-3">
           {/* Founder Metadata */}
           <div className="flex items-center gap-3 px-2 py-1">
-            <div className="w-9 h-9 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/30 flex items-center justify-center font-display font-semibold text-[#4A154B]">
-              MS
-            </div>
+            <img 
+              src="/logo.jpg" 
+              alt="Mrinalini Singh" 
+              className="w-9 h-9 rounded-full object-cover border border-[#D4AF37]/30 shadow-sm" 
+            />
             <div>
               <span className="text-xs font-bold text-[#1A1A1A] block">
                 Mrinalini Singh
