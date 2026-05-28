@@ -1,65 +1,282 @@
-import Image from "next/image";
+import Link from "next/link";
+import Sidebar from "@/components/layout/Sidebar";
+import Header from "@/components/layout/Header";
+import { shopifySaree } from "@/lib/shopify";
+import { sareeDb } from "@/lib/db";
+import { 
+  ShoppingBag, 
+  AlertTriangle, 
+  TrendingUp, 
+  DollarSign, 
+  Sparkles, 
+  ArrowRight,
+  PlusCircle,
+  UploadCloud
+} from "lucide-react";
 
-export default function Home() {
+export const revalidate = 0; // Disable cache so the dashboard is always live
+
+export default async function DashboardPage() {
+  let products: any[] = [];
+  let totalStock = 0;
+  let totalRetailValue = 0;
+  let totalCostValue = 0;
+  let lowStockProducts: any[] = [];
+  
+  try {
+    // 1. Fetch products from Shopify
+    const listRes = await shopifySaree.list(150);
+    products = listRes.products;
+
+    // 2. Fetch corresponding metadata from Redis
+    const skus = products.map(p => p.sku).filter(Boolean);
+    const metaMap = await sareeDb.mget(skus);
+
+    // 3. Compute stats
+    products.forEach(p => {
+      const stock = p.stock || 0;
+      totalStock += stock;
+      
+      const retailPrice = p.price || 0;
+      totalRetailValue += retailPrice * stock;
+
+      const meta = metaMap[p.sku];
+      if (meta) {
+        totalCostValue += (meta.costPrice || 0) * stock;
+      }
+
+      if (stock < 3) {
+        lowStockProducts.push({
+          ...p,
+          costPrice: meta?.costPrice || 0,
+          margin: meta?.margin || 0
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error("Dashboard data fetching failed:", error);
+  }
+
+  const totalSareesCount = products.length;
+  const netMargin = totalRetailValue > 0 
+    ? ((totalRetailValue - totalCostValue) / totalRetailValue) * 100 
+    : 0;
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+    <div className="flex min-h-screen bg-[#FAF8F5]">
+      {/* Sidebar Navigation */}
+      <Sidebar />
+
+      {/* Main Panel Content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Top Header */}
+        <Header title="Workspace Overview" />
+
+        {/* Dashboard Frame */}
+        <main className="flex-1 overflow-y-auto p-8 max-w-[1360px] mx-auto w-full space-y-8">
+          
+          {/* Quick Actions Bar */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/40 border border-[#4A154B]/10 rounded-2xl p-6 backdrop-blur-md">
+            <div>
+              <h3 className="font-display font-bold text-lg text-[#4A154B] flex items-center gap-2">
+                <Sparkles size={18} className="text-[#D4AF37]" />
+                Welcome Back, Mrinalini!
+              </h3>
+              <p className="text-xs text-[#1A1A1A]/60 mt-0.5">
+                Ready to manage your beautiful handwoven saree catalog today?
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <Link href="/products/add" className="btn-primary no-underline text-xs uppercase tracking-wider flex items-center gap-1.5 py-2.5 px-4 shadow-md">
+                <PlusCircle size={14} />
+                Create Saree
+              </Link>
+              <Link href="/bulk-upload" className="btn-secondary no-underline text-xs uppercase tracking-wider flex items-center gap-1.5 py-2.5 px-4">
+                <UploadCloud size={14} />
+                Bulk CSV Upload
+              </Link>
+            </div>
+          </div>
+
+          {/* Core Dashboard Metric Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            
+            {/* Unique Saree Items Card */}
+            <div className="ui-card ui-card-hover p-6 flex items-center gap-4 relative overflow-hidden">
+              <div className="w-12 h-12 rounded-xl bg-[#4A154B]/5 border border-[#4A154B]/10 flex items-center justify-center text-[#4A154B]">
+                <ShoppingBag size={20} />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Unique Saree Styles</span>
+                <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">{totalSareesCount}</h4>
+              </div>
+              <div className="absolute -right-6 -bottom-6 text-[#4A154B] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
+                #
+              </div>
+            </div>
+
+            {/* Total In-Stock Items Card */}
+            <div className="ui-card ui-card-hover p-6 flex items-center gap-4 relative overflow-hidden">
+              <div className="w-12 h-12 rounded-xl bg-[#D4AF37]/5 border border-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]">
+                <TrendingUp size={20} />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Total Active Stock</span>
+                <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">{totalStock} sarees</h4>
+              </div>
+              <div className="absolute -right-6 -bottom-6 text-[#D4AF37] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
+                PCS
+              </div>
+            </div>
+
+            {/* Retail Catalog Value Card */}
+            <div className="ui-card ui-card-hover p-6 flex items-center gap-4 relative overflow-hidden">
+              <div className="w-12 h-12 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center text-green-700">
+                <DollarSign size={20} />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Total Retail Value</span>
+                <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">
+                  ₹{totalRetailValue.toLocaleString('en-IN')}
+                </h4>
+              </div>
+              <div className="absolute -right-6 -bottom-6 text-green-500 opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
+                ₹
+              </div>
+            </div>
+
+            {/* Overall Profit Margin Health Card */}
+            <div className="ui-card ui-card-hover p-6 flex items-center gap-4 relative overflow-hidden">
+              <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700">
+                <TrendingUp size={20} />
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Est. Profit Margin</span>
+                <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">
+                  {netMargin.toFixed(1)}%
+                </h4>
+              </div>
+              <div className="absolute -right-6 -bottom-6 text-blue-500 opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
+                %
+              </div>
+            </div>
+
+          </div>
+
+          {/* Low Stock Alert Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Left Side: Low Stock Table */}
+            <div className="ui-card p-6 lg:col-span-2 space-y-4">
+              <div className="flex justify-between items-center">
+                <h4 className="font-display font-bold text-base text-[#4A154B] flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-[#D4AF37]" />
+                  Stock Alert Level (Low Stock)
+                </h4>
+                <Link href="/products" className="no-underline text-xs text-[#4A154B] hover:underline font-semibold flex items-center gap-1">
+                  View Full Grid
+                  <ArrowRight size={12} />
+                </Link>
+              </div>
+
+              {lowStockProducts.length === 0 ? (
+                <div className="h-48 rounded-xl border border-dashed border-[#4A154B]/10 flex items-center justify-center bg-[#FAF8F5]/30">
+                  <p className="text-xs text-[#1A1A1A]/40 font-medium">
+                    🎉 Excellent! All active catalog items are fully stocked.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#4A154B]/10 text-[10px] uppercase tracking-wider text-[#1A1A1A]/50 font-bold">
+                        <th className="pb-3">Saree Title</th>
+                        <th className="pb-3">SKU</th>
+                        <th className="pb-3 text-center">Current Stock</th>
+                        <th className="pb-3 text-right">Retail Price</th>
+                        <th className="pb-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#4A154B]/5 text-xs text-[#1A1A1A]/80">
+                      {lowStockProducts.slice(0, 5).map((p) => (
+                        <tr key={p.id} className="hover:bg-[#4A154B]/5 transition-colors duration-200">
+                          <td className="py-3 font-semibold text-[#4A154B] max-w-[200px] truncate">
+                            {p.title}
+                          </td>
+                          <td className="py-3 font-mono text-[11px] text-[#1A1A1A]/60">
+                            {p.sku}
+                          </td>
+                          <td className="py-3 text-center">
+                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                              p.stock === 0 
+                                ? 'bg-red-50 text-red-600 border border-red-100' 
+                                : 'bg-[#D4AF37]/5 text-[#4A154B] border border-[#D4AF37]/20'
+                            }`}>
+                              {p.stock === 0 ? "Out of Stock" : `${p.stock} left`}
+                            </span>
+                          </td>
+                          <td className="py-3 text-right font-medium">
+                            ₹{(p.price || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 text-right">
+                            <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-xs bg-[#4A154B]/5 text-[#4A154B] hover:bg-[#4A154B] hover:text-white px-2.5 py-1 rounded font-semibold transition-colors duration-200">
+                              Edit Stock
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Right Side: Margin Analysis Visual Panel */}
+            <div className="ui-card p-6 flex flex-col justify-between space-y-6">
+              <div>
+                <h4 className="font-display font-bold text-base text-[#4A154B]">
+                  Financial Health Analysis
+                </h4>
+                <p className="text-xs text-[#1A1A1A]/60 mt-1">
+                  Private overview comparing your retail income value to saree base cost investments.
+                </p>
+              </div>
+
+              {/* Graphical Circular Progress Meter */}
+              <div className="flex flex-col items-center justify-center py-4 space-y-3">
+                <div className="relative w-36 h-36 rounded-full border-8 border-[#4A154B]/5 flex items-center justify-center shadow-inner" style={{
+                  background: `conic-gradient(var(--deep-plum) ${netMargin}%, transparent 0)`
+                }}>
+                  {/* Center Circle Mask */}
+                  <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-lg border border-[#4A154B]/5">
+                    <span className="text-xs font-semibold text-[#1A1A1A]/50 uppercase tracking-widest leading-none">Margin</span>
+                    <span className="text-3xl font-display font-bold text-[#4A154B] mt-1">{netMargin.toFixed(0)}%</span>
+                  </div>
+                </div>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A154B]">Est. Net Profitability</span>
+              </div>
+
+              <div className="space-y-3 border-t border-[#4A154B]/5 pt-4 text-xs text-[#1A1A1A]/70">
+                <div className="flex justify-between">
+                  <span>Gross Inventory Worth:</span>
+                  <span className="font-semibold text-[#1A1A1A]">₹{totalRetailValue.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between border-b border-[#4A154B]/5 pb-2">
+                  <span>Gross Saree Costs (Redis):</span>
+                  <span className="font-semibold text-red-600">₹{totalCostValue.toLocaleString('en-IN')}</span>
+                </div>
+                <div className="flex justify-between font-bold text-sm text-[#4A154B]">
+                  <span>Net Estimated Profit:</span>
+                  <span className="text-green-600">₹{(totalRetailValue - totalCostValue).toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+        </main>
+      </div>
     </div>
   );
 }
