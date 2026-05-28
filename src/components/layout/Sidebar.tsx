@@ -12,7 +12,8 @@ import {
   FolderHeart, 
   LogOut,
   X,
-  BookOpen
+  BookOpen,
+  Package
 } from "lucide-react";
 
 interface NavItem {
@@ -27,6 +28,7 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Add Saree", href: "/products/add", icon: PlusCircle },
   { label: "Bulk Upload", href: "/bulk-upload", icon: UploadCloud },
   { label: "Collections", href: "/collections", icon: FolderHeart },
+  { label: "Customer Orders", href: "/orders", icon: Package },
   { label: "Operations Guide", href: "/manual", icon: BookOpen },
 ];
 

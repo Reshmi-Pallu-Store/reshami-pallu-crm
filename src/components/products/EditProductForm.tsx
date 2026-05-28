@@ -623,44 +623,84 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
         </h3>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center">
-            <ImageIcon size={32} className="text-[#4A154B]/40 mb-3" />
-            <span className="text-xs font-bold text-[#4A154B]">Upload Saree Photos</span>
-            <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
-              <strong>Recommended:</strong> JPEG, PNG, or WebP<br />
-              <strong>Dimensions:</strong> 2:3 Vertical Ratio (e.g., 1000 x 1500 px)<br />
-              <strong>File Size:</strong> Under 5 MB per photo
-            </span>
-            <input 
-              type="file" 
-              accept="image/*" 
-              onChange={handleImageUpload} 
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              disabled={uploadingImage}
-            />
-            {uploadingImage && <div className="text-xs text-[#4A154B] font-semibold animate-pulse mt-2">Uploading Photo...</div>}
+          {/* Image upload */}
+          <div>
+            <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center min-h-[220px]">
+              <ImageIcon size={32} className="text-[#4A154B]/40 mb-3" />
+              <span className="text-xs font-bold text-[#4A154B]">Upload Saree Photos</span>
+              <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
+                <strong>Recommended:</strong> JPEG, PNG, or WebP<br />
+                <strong>Dimensions:</strong> 2:3 Vertical Ratio (e.g., 1000 x 1500 px)<br />
+                <strong>File Size:</strong> Under 5 MB per photo
+              </span>
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleImageUpload} 
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                disabled={uploadingImage}
+              />
+              {uploadingImage && <div className="text-xs text-[#4A154B] font-semibold animate-pulse mt-2">Uploading Photo...</div>}
+            </div>
+
+            {/* Previews of uploaded images */}
+            {images.length > 0 && (
+              <div className="grid grid-cols-3 gap-3 w-full mt-4">
+                {images.map((img, index) => (
+                  <div key={img.id || index} className="relative aspect-[2/3] rounded-lg overflow-hidden border border-[#4A154B]/10 bg-[#FAF8F5]">
+                    <img src={img.url} alt={`Uploaded ${index + 1}`} className="object-cover w-full h-full" />
+                    <button
+                      type="button"
+                      onClick={() => setImages(prev => prev.filter((_, i) => i !== index))}
+                      className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer"
+                      aria-label="Remove image"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center">
-            <VideoIcon size={32} className="text-[#D4AF37]/60 mb-3" />
-            <span className="text-xs font-bold text-[#4A154B]">Upload Short Video (Optional)</span>
-            <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
-              <strong>Format:</strong> MP4 (H.264 codec)<br />
-              <strong>Length:</strong> 5 - 15 seconds (Muted/No audio)<br />
-              <strong>Aspect Ratio:</strong> Vertical 9:16 or 2:3 (e.g., 1080 x 1920 px)<br />
-              <strong>File Size:</strong> Under 10 MB (for instant looping page loads)
-            </span>
-            <input 
-              type="file" 
-              accept="video/mp4" 
-              onChange={handleVideoUpload} 
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              disabled={uploadingVideo}
-            />
-            {uploadingVideo && <div className="text-xs text-[#4A154B] font-semibold animate-pulse mt-2">Uploading Looping Video...</div>}
+          {/* Video upload */}
+          <div>
+            <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center min-h-[220px]">
+              <VideoIcon size={32} className="text-[#D4AF37]/60 mb-3" />
+              <span className="text-xs font-bold text-[#4A154B]">Upload Short Video (Optional)</span>
+              <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
+                <strong>Format:</strong> MP4 (H.264 codec)<br />
+                <strong>Length:</strong> 5 - 15 seconds (Muted/No audio)<br />
+                <strong>Aspect Ratio:</strong> Vertical 9:16 or 2:3 (e.g., 1080 x 1920 px)<br />
+                <strong>File Size:</strong> Under 100 MB (expanded)
+              </span>
+              <input 
+                type="file" 
+                accept="video/mp4" 
+                onChange={handleVideoUpload} 
+                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                disabled={uploadingVideo}
+              />
+              {uploadingVideo && <div className="text-xs text-[#4A154B] font-semibold animate-pulse mt-2">Uploading Looping Video...</div>}
+            </div>
+
+            {/* Video preview */}
             {video && (
-              <div className="text-xs text-green-600 bg-green-50 border border-green-200/50 rounded-lg p-2.5 mt-2">
-                ✓ Loop Video Attached Successfully!
+              <div className="mt-4 flex flex-col items-center">
+                <div className="relative aspect-[9/16] w-[140px] rounded-lg overflow-hidden border border-[#4A154B]/10 bg-[#FAF8F5] shadow-sm">
+                  <video src={video.url} controls muted loop playsInline className="object-cover w-full h-full" />
+                  <button
+                    type="button"
+                    onClick={() => setVideo(null)}
+                    className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer"
+                    aria-label="Remove video"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="text-[11px] text-green-600 font-semibold mt-2 flex items-center gap-1">
+                  ✓ Looping Video Attached Successfully!
+                </div>
               </div>
             )}
           </div>
@@ -706,10 +746,12 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
       <div className="flex justify-end p-4">
         <button
           type="submit"
-          disabled={loading}
-          className="btn-primary py-3 px-8 text-xs uppercase tracking-wider font-semibold shadow-md"
+          disabled={loading || uploadingImage || uploadingVideo}
+          className={`btn-primary py-3 px-8 text-xs uppercase tracking-wider font-semibold shadow-md ${(loading || uploadingImage || uploadingVideo) ? "opacity-60 cursor-not-allowed" : ""}`}
         >
-          {loading ? "Saving Saree details..." : "Save Product"}
+          {loading ? "Saving Saree details..." : 
+           uploadingImage ? "Uploading Photo..." :
+           uploadingVideo ? "Uploading Looping Video..." : "Save Product"}
         </button>
       </div>
 

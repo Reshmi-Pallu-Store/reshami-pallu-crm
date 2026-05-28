@@ -273,10 +273,10 @@ export const shopifySaree = {
       { namespace: "saree", key: "color_family", value: saree.metafields.colorFamily || '', type: "single_line_text_field" },
       { namespace: "saree", key: "occasion", value: saree.metafields.occasion || '', type: "single_line_text_field" },
       { namespace: "saree", key: "region", value: saree.metafields.region || '', type: "single_line_text_field" },
-      { namespace: "saree", key: "blouse_included", value: saree.metafields.blouseIncluded ? 'true' : 'false', type: "boolean" },
+      { namespace: "saree", key: "blouse_included", value: saree.metafields.blouseIncluded ? 'true' : 'false', type: "single_line_text_field" },
       { namespace: "saree", key: "blouse_length", value: saree.metafields.blouseLength || '', type: "single_line_text_field" },
       { namespace: "saree", key: "wash_care", value: saree.metafields.washCare || '', type: "single_line_text_field" },
-      { namespace: "saree", key: "founders_exclusive", value: saree.metafields.foundersExclusive ? 'true' : 'false', type: "boolean" },
+      { namespace: "saree", key: "founders_exclusive", value: saree.metafields.foundersExclusive ? 'true' : 'false', type: "single_line_text_field" },
     ].filter(m => m.value !== '');
 
     // Add short video if a file reference exists
@@ -302,17 +302,7 @@ export const shopifySaree = {
         vendor: "Reshami Pallu",
         status: saree.status,
         tags,
-        metafields,
-        variants: [
-          {
-            price: saree.price.toString(),
-            compareAtPrice: saree.compareAtPrice ? saree.compareAtPrice.toString() : null,
-            sku: saree.sku,
-            inventoryItem: {
-              tracked: true
-            }
-          }
-        ]
+        metafields
       }
     };
 
@@ -325,7 +315,55 @@ export const shopifySaree = {
       throw new Error(`Shopify Saree creation failed: ${res.productCreate.userErrors[0].message}`);
     }
 
-    const createdProduct = mapShopifyProduct(res.productCreate.product);
+    const createdProductDetails = res.productCreate.product;
+    const defaultVariantId = createdProductDetails.variants.edges[0]?.node.id;
+
+    if (defaultVariantId) {
+      const variantMutation = `
+        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+            productVariants {
+              id
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      const variantRes = await shopifyAdminFetch<{ productVariantsBulkUpdate: { productVariants: any[], userErrors: Array<{ message: string }> } }>({
+        query: variantMutation,
+        variables: {
+          productId: createdProductDetails.id,
+          variants: [
+            {
+              id: defaultVariantId,
+              price: saree.price.toString(),
+              compareAtPrice: saree.compareAtPrice ? saree.compareAtPrice.toString() : null,
+              inventoryItem: {
+                sku: saree.sku,
+                tracked: true
+              }
+            }
+          ]
+        }
+      });
+
+      if (variantRes.productVariantsBulkUpdate.userErrors.length > 0) {
+        throw new Error(`Default variant update failed: ${variantRes.productVariantsBulkUpdate.userErrors[0].message}`);
+      }
+
+      // Update in-memory references so mapShopifyProduct works perfectly
+      if (createdProductDetails.variants.edges[0]?.node) {
+        createdProductDetails.variants.edges[0].node.price = saree.price.toString();
+        createdProductDetails.variants.edges[0].node.compareAtPrice = saree.compareAtPrice ? saree.compareAtPrice.toString() : null;
+        createdProductDetails.variants.edges[0].node.sku = saree.sku;
+      }
+    }
+
+    const createdProduct = mapShopifyProduct(createdProductDetails);
 
     // Set stock quantity if defined and > 0
     if (saree.stock > 0 && createdProduct.inventoryItemId) {
@@ -376,10 +414,10 @@ export const shopifySaree = {
       if (m.colorFamily !== undefined) metafields.push({ namespace: "saree", key: "color_family", value: m.colorFamily, type: "single_line_text_field" });
       if (m.occasion !== undefined) metafields.push({ namespace: "saree", key: "occasion", value: m.occasion, type: "single_line_text_field" });
       if (m.region !== undefined) metafields.push({ namespace: "saree", key: "region", value: m.region, type: "single_line_text_field" });
-      if (m.blouseIncluded !== undefined) metafields.push({ namespace: "saree", key: "blouse_included", value: m.blouseIncluded ? 'true' : 'false', type: "boolean" });
+      if (m.blouseIncluded !== undefined) metafields.push({ namespace: "saree", key: "blouse_included", value: m.blouseIncluded ? 'true' : 'false', type: "single_line_text_field" });
       if (m.blouseLength !== undefined) metafields.push({ namespace: "saree", key: "blouse_length", value: m.blouseLength, type: "single_line_text_field" });
       if (m.washCare !== undefined) metafields.push({ namespace: "saree", key: "wash_care", value: m.washCare, type: "single_line_text_field" });
-      if (m.foundersExclusive !== undefined) metafields.push({ namespace: "saree", key: "founders_exclusive", value: m.foundersExclusive ? 'true' : 'false', type: "boolean" });
+      if (m.foundersExclusive !== undefined) metafields.push({ namespace: "saree", key: "founders_exclusive", value: m.foundersExclusive ? 'true' : 'false', type: "single_line_text_field" });
       
       if (m.shortVideo?.id) {
         metafields.push({ namespace: "saree", key: "short_video", value: m.shortVideo.id, type: "file_reference" });
@@ -455,7 +493,7 @@ export const shopifySaree = {
     if (!locationId) throw new Error("Shopify Locations not configured");
 
     const mutation = `
-      mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
+      mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) @idempotent {
         inventorySetQuantities(input: $input) {
           inventoryAdjustmentGroup {
             createdAt
@@ -475,7 +513,8 @@ export const shopifySaree = {
           {
             inventoryItemId,
             locationId,
-            quantity
+            quantity,
+            changeFromQuantity: null
           }
         ]
       }
@@ -516,8 +555,8 @@ export const shopifySaree = {
     if (!variantId) return;
 
     const mutation = `
-      mutation productVariantUpdate($input: ProductVariantInput!) {
-        productVariantUpdate(input: $input) {
+      mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
           userErrors {
             message
           }
@@ -525,14 +564,21 @@ export const shopifySaree = {
       }
     `;
 
-    const input: any = { id: variantId };
-    if (price !== undefined) input.price = price.toString();
-    if (compareAtPrice !== undefined) input.compareAtPrice = compareAtPrice ? compareAtPrice.toString() : null;
-    if (sku !== undefined) input.sku = sku;
+    const variantInput: any = { id: variantId };
+    if (price !== undefined) variantInput.price = price.toString();
+    if (compareAtPrice !== undefined) variantInput.compareAtPrice = compareAtPrice ? compareAtPrice.toString() : null;
+    if (sku !== undefined) {
+      variantInput.inventoryItem = {
+        sku: sku
+      };
+    }
 
     await shopifyAdminFetch({
       query: mutation,
-      variables: { input }
+      variables: {
+        productId,
+        variants: [variantInput]
+      }
     });
   },
 
@@ -560,17 +606,21 @@ export const shopifySaree = {
       }
     `;
 
+    const uploadInput: any = {
+      resource: mimeType.startsWith('video/') ? 'VIDEO' : 'IMAGE',
+      filename: fileName,
+      mimeType: mimeType,
+      httpMethod: 'POST'
+    };
+
+    if (mimeType.startsWith('video/')) {
+      uploadInput.fileSize = String(fileBuffer.length);
+    }
+
     const stagedRes = await shopifyAdminFetch<{ stagedUploadsCreate: { stagedTargets: Array<{ url: string, resourceUrl: string, parameters: Array<{ name: string, value: string }> }>, userErrors: Array<{ message: string }> } }>({
       query: mutation,
       variables: {
-        input: [
-          {
-            resource: mimeType.startsWith('video/') ? 'VIDEO' : 'IMAGE',
-            filename: fileName,
-            mimeType: mimeType,
-            httpMethod: 'POST'
-          }
-        ]
+        input: [uploadInput]
       }
     });
 
@@ -745,6 +795,77 @@ export const shopifyCollection = {
     } catch (err) {
       console.error(`Failed to create Smart Collection for tag ${tag}:`, err);
       return false;
+    }
+  }
+};
+
+export const shopifyOrder = {
+  async list(limit = 50): Promise<any[]> {
+    const query = `
+      query getOrders($first: Int!) {
+        orders(first: $first, sortKey: CREATED_AT, reverse: true) {
+          edges {
+            node {
+              id
+              name
+              createdAt
+              totalPriceSet {
+                presentmentMoney {
+                  amount
+                }
+              }
+              displayFinancialStatus
+              displayFulfillmentStatus
+              customer {
+                firstName
+                lastName
+                phone
+                email
+              }
+              tags
+              note
+              customAttributes {
+                key
+                value
+              }
+              lineItems(first: 20) {
+                edges {
+                  node {
+                    title
+                    quantity
+                    sku
+                    originalUnitPriceSet {
+                      presentmentMoney {
+                        amount
+                      }
+                    }
+                  }
+                }
+              }
+              shippingAddress {
+                fullName
+                address1
+                address2
+                city
+                province
+                zip
+                phone
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    try {
+      const data = await shopifyAdminFetch<{ orders: { edges: Array<{ node: any }> } }>({
+        query,
+        variables: { first: limit }
+      });
+      return data.orders.edges.map(e => e.node);
+    } catch (err) {
+      console.error("Failed to fetch Shopify orders:", err);
+      return [];
     }
   }
 };
