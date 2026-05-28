@@ -138,15 +138,19 @@ export default function AddProductPage() {
     }
 
     const numStr = String(skuNumber).padStart(3, "0");
-    setSku(`RP-${regCode}-${colorCode}-${numStr}`);
-  }, [region, customRegion, colorFamily, customColorFamily, skuNumber]);
+    setSku(`RP-${colorCode}-${numStr}`);
+  }, [colorFamily, customColorFamily, skuNumber]);
 
   // Fetch stock counts to auto-increment SKU numbers
   useEffect(() => {
     const fetchLatestNumber = async () => {
       try {
-        const selectedRegion = region === "Other" ? customRegion : region;
-        const res = await fetch("/api/products/sku-count?region=" + encodeURIComponent(selectedRegion));
+        const selectedColor = colorFamily === "Other" ? customColorFamily : colorFamily;
+        let colorCode = COLOR_CODES[selectedColor];
+        if (!colorCode) {
+          colorCode = selectedColor ? selectedColor.slice(0, 3).toUpperCase() : "OTH";
+        }
+        const res = await fetch("/api/products/sku-count?color=" + encodeURIComponent(colorCode));
         if (res.ok) {
           const data = await res.json();
           setSkuNumber(data.count + 1);
@@ -157,7 +161,7 @@ export default function AddProductPage() {
       }
     };
     fetchLatestNumber();
-  }, [region, customRegion]);
+  }, [colorFamily, customColorFamily]);
 
   // Live Margin Calculation
   const priceVal = parseFloat(price) || 0;
@@ -310,6 +314,7 @@ export default function AddProductPage() {
         stock: parseInt(stock || "0"),
         sku,
         tags,
+        images,
         metafields: {
           fabric: finalFabric,
           weave: finalWeave,

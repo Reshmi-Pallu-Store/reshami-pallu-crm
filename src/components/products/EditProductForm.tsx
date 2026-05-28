@@ -62,7 +62,7 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
   const [newTag, setNewTag] = useState("");
 
   // Media
-  const [images, setImages] = useState<Array<{ id: string, url: string }>>([]);
+  const [images, setImages] = useState<Array<{ id: string, url: string }>>(initialProduct.images || []);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [video, setVideo] = useState<{ id: string, url: string } | null>(initialProduct.metafields.shortVideo || null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -266,6 +266,7 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
         costPrice: parseFloat(costPrice || "0"),
         stock: parseInt(stock || "0"),
         tags,
+        images,
         metafields: {
           fabric: finalFabric,
           weave: finalWeave,

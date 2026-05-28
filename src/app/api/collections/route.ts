@@ -33,4 +33,14 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Server Error" }, { status: 500 });
   }
+} 
+export async function GET(req: NextRequest) {
+  try {
+    const collections = await shopifyCollection.list(250);
+    const titles = collections.map((c: any) => c.title);
+    return NextResponse.json({ collections: titles });
+  } catch (err: any) {
+    console.error("Collections API GET failure:", err);
+    return NextResponse.json({ error: err.message || "Failed to fetch collections" }, { status: 500 });
+  }
 }

@@ -11,9 +11,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const region = searchParams.get("region") || "Banaras";
+    const color = searchParams.get("color") || "RED";
 
-    // Query Shopify for products matching this region tag or vendor
     const query = `
       query countProducts($query: String!) {
         productsCount(query: $query) {
@@ -25,7 +24,7 @@ export async function GET(req: NextRequest) {
     const data = await shopifyAdminFetch<{ productsCount: { count: number } }>({
       query,
       variables: {
-        query: `vendor:'Reshami Pallu' AND tag:'Region:${region}'`
+        query: `sku:RP-${color}-*`
       }
     });
 

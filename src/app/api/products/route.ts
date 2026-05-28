@@ -58,6 +58,15 @@ export async function POST(req: NextRequest) {
       sareeData.metafields.shortVideo = await resolveQueuedMedia(sareeData.metafields.shortVideo);
     }
 
+    // Resolve queued images if present
+    if (sareeData.images && Array.isArray(sareeData.images)) {
+      const resolvedImages = [];
+      for (const img of sareeData.images) {
+        resolvedImages.push(await resolveQueuedMedia(img));
+      }
+      sareeData.images = resolvedImages;
+    }
+
     console.log(`⏳ Pushing new Saree to Shopify: ${sareeData.sku}...`);
     // 1. Create Saree in Shopify
     const createdProduct = await shopifySaree.create(sareeData);
@@ -102,6 +111,15 @@ export async function PUT(req: NextRequest) {
       sareeData.metafields.shortVideo = await resolveQueuedMedia(sareeData.metafields.shortVideo);
     }
 
+    // Resolve queued images if present
+    if (sareeData.images && Array.isArray(sareeData.images)) {
+      const resolvedImages = [];
+      for (const img of sareeData.images) {
+        resolvedImages.push(await resolveQueuedMedia(img));
+      }
+      sareeData.images = resolvedImages;
+    }
+
     console.log(`⏳ Updating Saree ${id} in Shopify...`);
     // 1. Update in Shopify
     const updatedProduct = await shopifySaree.update(id, sareeData);
@@ -123,5 +141,36 @@ export async function PUT(req: NextRequest) {
   } catch (err: any) {
     console.error("Product update API failure:", err);
     return NextResponse.json({ error: err.message || "Failed to update product" }, { status: 500 });
+  }
+}
+
+// DELETE: Remove a Saree product
+export async function DELETE(req: NextRequest) {
+  try {
+    if (!await verifySession()) {
+      return NextResponse.json({ error: "Unauthorized access" }, { status: 401 });
+    }
+
+    // Extract query params (id and sku)
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+    const sku = searchParams.get('sku');
+
+    if (!id) {
+      return NextResponse.json({ error: "Product ID is required for deletion" }, { status: 400 });
+    }
+
+    // Delete from Shopify
+    const deleted = await shopifySaree.delete(id);
+
+    // Clean up Redis metadata if sku provided
+    if (sku) {
+      await sareeDb.delete(sku);
+    }
+
+    return NextResponse.json({ success: deleted, id });
+  } catch (err: any) {
+    console.error("Product delete API failure:", err);
+    return NextResponse.json({ error: err.message || "Failed to delete product" }, { status: 500 });
   }
 }

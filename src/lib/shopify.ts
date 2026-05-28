@@ -1,3 +1,4 @@
+import crypto from "crypto";
 const domain = process.env.SHOPIFY_STORE_DOMAIN || 'reshmi-pallu.myshopify.com';
 const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 const apiVersion = process.env.SHOPIFY_API_VERSION || '2026-04';
@@ -64,6 +65,7 @@ export interface SareeProduct {
   status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
   tags: string[];
   imageUrl?: string;
+  images?: Array<{ id: string; url: string }>;
   sku: string;
   price: number;
   compareAtPrice?: number | null;
@@ -100,6 +102,18 @@ const PRODUCT_FRAGMENT = `
     tags
     featuredImage {
       url
+    }
+    media(first: 20) {
+      edges {
+        node {
+          ... on MediaImage {
+            id
+            image {
+              url
+            }
+          }
+        }
+      }
     }
     variants(first: 1) {
       edges {
@@ -166,6 +180,15 @@ function mapShopifyProduct(node: any): SareeProduct {
     };
   }
 
+  // Extract Images
+  const mediaEdges = node.media?.edges || [];
+  const images = mediaEdges
+    .filter((e: any) => e.node.image?.url)
+    .map((e: any) => ({
+      id: e.node.id,
+      url: e.node.image.url
+    }));
+
   return {
     id: node.id,
     title: node.title,
@@ -174,6 +197,7 @@ function mapShopifyProduct(node: any): SareeProduct {
     status: node.status,
     tags: node.tags || [],
     imageUrl: node.featuredImage?.url,
+    images,
     sku: variantEdge?.sku || '',
     price: parseFloat(variantEdge?.price || '0'),
     compareAtPrice: variantEdge?.compareAtPrice ? parseFloat(variantEdge.compareAtPrice) : null,
@@ -295,15 +319,31 @@ export const shopifySaree = {
       tags.push('Founders-Exclusive');
     }
 
+    // Prepare media array if shortVideo media ID is available
+    const media = [];
+    if (saree.metafields.shortVideo?.id) {
+      // For Shopify media creation, use the uploaded media ID as originalSource
+      media.push({ originalSource: saree.metafields.shortVideo.id, mediaContentType: "VIDEO" });
+    }
+
+    if ((saree as any).images && Array.isArray((saree as any).images)) {
+      for (const img of (saree as any).images) {
+        if (img.url) {
+          media.push({ originalSource: (img.id && img.id.startsWith("gid://")) ? img.id : img.url, mediaContentType: "IMAGE" });
+        }
+      }
+    }
+
     const variables = {
       input: {
         title: saree.title,
         descriptionHtml: saree.descriptionHtml,
         vendor: "Reshami Pallu",
-        status: saree.status,
+        status: "ACTIVE",
         tags,
         metafields
-      }
+      },
+      media
     };
 
     const res = await shopifyAdminFetch<{ productCreate: { product: any, userErrors: Array<{ message: string }> } }>({
@@ -317,6 +357,32 @@ export const shopifySaree = {
 
     const createdProductDetails = res.productCreate.product;
     const defaultVariantId = createdProductDetails.variants.edges[0]?.node.id;
+
+    // Ensure product appears in the "All Sarees" collection and tag‑based smart collections
+    await this.ensureAllSareesCollection();
+    await this.addProductToCollections(createdProductDetails.id, tags);
+    await this.ensurePublished(createdProductDetails.id);
+
+    // If media was uploaded, set the first media as the featured image (fallback to fresh fetch if needed)
+    if (media && media.length > 0) {
+      // Try using the media ID returned from creation (if present)
+      const freshProduct = await this.get(createdProductDetails.id);
+      const createdMediaId = (freshProduct as any)?.media?.edges?.[0]?.node?.id || (res.productCreate.product.media?.edges?.[0]?.node?.id);
+      
+      if (createdMediaId) {
+        const imageUpdateMutation = `
+          mutation setFeaturedImage($id: ID!, $imageId: ID!) {
+            productUpdate(input: { id: $id, featuredImageId: $imageId }) {
+              product { id featuredImage { id url } }
+              userErrors { field message }
+            }
+          }
+        `;
+        await shopifyAdminFetch<{ productUpdate: { product: any, userErrors: Array<{message:string}> } }>(
+          { query: imageUpdateMutation, variables: { id: createdProductDetails.id, imageId: createdMediaId } }
+        );
+      }
+    }
 
     if (defaultVariantId) {
       const variantMutation = `
@@ -374,6 +440,95 @@ export const shopifySaree = {
     return createdProduct;
   },
 
+  async ensureAllSareesCollection(): Promise<string> {
+    const title = 'All Sarees';
+    const handle = 'all-sarees';
+    const collections = await shopifyCollection.list(250);
+    const existing = collections.find(c => c.handle === handle);
+    if (existing) return existing.id;
+
+    const mutation = `
+      mutation collectionCreate($input: CollectionInput!) {
+        collectionCreate(input: $input) {
+          collection { id title }
+          userErrors { message }
+        }
+      }
+    `;
+    const res = await shopifyAdminFetch<{
+      collectionCreate: { collection: any; userErrors: Array<{ message: string }> };
+    }>({
+      query: mutation,
+      variables: {
+        input: { title, handle }
+      }
+    });
+    if (res.collectionCreate.userErrors.length) {
+      throw new Error(`Failed to create "All Sarees" collection: ${res.collectionCreate.userErrors[0].message}`);
+    }
+    return res.collectionCreate.collection.id;
+  },
+
+  async collectionAddProducts(collectionId: string, productIds: string[]) {
+    const mutation = `
+      mutation collectionAddProducts($id: ID!, $productIds: [ID!]!) {
+        collectionAddProducts(id: $id, productIds: $productIds) {
+          userErrors { message }
+        }
+      }
+    `;
+    const res = await shopifyAdminFetch<{
+      collectionAddProducts: { userErrors: Array<{ message: string }> };
+    }>({
+      query: mutation,
+      variables: { id: collectionId, productIds }
+    });
+    // Ignore errors (like if it's already in the collection)
+  },
+
+  async addProductToCollections(productId: string, tags: string[]) {
+    // 1. Ensure "All Sarees" manual collection and add the product.
+    const allId = await this.ensureAllSareesCollection();
+    await this.collectionAddProducts(allId, [productId]);
+
+    // 2. For each tag, ensure a smart collection exists.
+    // The product will be added automatically because it has the tag.
+    for (const tag of tags) {
+      const smartTitle = `Sarees - ${tag}`;
+      await shopifyCollection.createSmart(smartTitle, tag);
+    }
+  },
+
+  async ensurePublished(productId: string) {
+    const pubQuery = `
+      query {
+        publications(first: 10) {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+    `;
+    const pubRes = await shopifyAdminFetch<{ publications: { edges: Array<{ node: { id: string } }> } }>({ query: pubQuery });
+    const publicationInputs = pubRes.publications.edges.map(e => ({ publicationId: e.node.id }));
+
+    if (publicationInputs.length > 0) {
+      const mutation = `
+        mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+          publishablePublish(id: $id, input: $input) {
+            userErrors { message }
+          }
+        }
+      `;
+      await shopifyAdminFetch({
+        query: mutation,
+        variables: { id: productId, input: publicationInputs }
+      });
+    }
+  },
+
   // Update an existing Saree product details
   async update(id: string, saree: Partial<SareeProduct>): Promise<SareeProduct> {
     const mutation = `
@@ -402,7 +557,11 @@ export const shopifySaree = {
         tags.push('Founders-Exclusive');
       }
       productInput.tags = tags;
+      // Re-apply collections based on tags
+      await this.addProductToCollections(id, tags);
     }
+
+    await this.ensurePublished(id);
 
     // Map Metafields
     if (saree.metafields) {
@@ -427,8 +586,8 @@ export const shopifySaree = {
     }
 
     // Update variant price, compareAtPrice or SKU if defined
+    const existing = await this.get(id);
     if (saree.price !== undefined || saree.compareAtPrice !== undefined || saree.sku !== undefined) {
-      const existing = await this.get(id);
       if (existing) {
         await this.updateVariant(existing.id, saree.price, saree.compareAtPrice, saree.sku);
       }
@@ -441,6 +600,61 @@ export const shopifySaree = {
 
     if (res.productUpdate.userErrors.length > 0) {
       throw new Error(`Shopify Saree update failed: ${res.productUpdate.userErrors[0].message}`);
+    }
+
+    // Handle Images Updates (diff existing vs new)
+    if ((saree as any).images && Array.isArray((saree as any).images) && existing) {
+      // Shopify's URLs might have query parameters (e.g., ?v=123). We should ignore them for comparison
+      const normalizeUrl = (url: string) => url ? url.split('?')[0] : '';
+      
+      const incomingImageUrls = (saree as any).images.map((img: any) => normalizeUrl(img.url)).filter(Boolean);
+      const existingImageUrls = (existing.images || []).map((img: any) => normalizeUrl(img.url));
+
+      // New images to upload
+      const newImages = (saree as any).images.filter((img: any) => !existingImageUrls.includes(normalizeUrl(img.url)));
+
+      // Deleted images to remove
+      const deletedMediaIds = (existing.images || [])
+        .filter((img: any) => !incomingImageUrls.includes(normalizeUrl(img.url)))
+        .map((img: any) => img.id);
+
+      // 1. Delete removed media
+      if (deletedMediaIds.length > 0) {
+        const deleteMutation = `
+          mutation productDeleteMedia($mediaIds: [ID!]!, $productId: ID!) {
+            productDeleteMedia(mediaIds: $mediaIds, productId: $productId) {
+              mediaUserErrors { message }
+            }
+          }
+        `;
+        await shopifyAdminFetch({
+          query: deleteMutation,
+          variables: { productId: id, mediaIds: deletedMediaIds }
+        });
+      }
+
+      // 2. Add new media
+      if (newImages.length > 0) {
+        const mediaInput = newImages.map((img: any) => ({
+          originalSource: (img.id && img.id.startsWith("gid://")) ? img.id : img.url,
+          mediaContentType: "IMAGE"
+        }));
+
+        const mediaMutation = `
+          mutation productCreateMedia($media: [CreateMediaInput!]!, $productId: ID!) {
+            productCreateMedia(media: $media, productId: $productId) {
+              mediaUserErrors { message field }
+            }
+          }
+        `;
+        const resMedia = await shopifyAdminFetch<{ productCreateMedia: { mediaUserErrors: Array<{ message: string, field: string[] }> } }>({
+          query: mediaMutation,
+          variables: { productId: id, media: mediaInput }
+        });
+        if (resMedia.productCreateMedia?.mediaUserErrors?.length > 0) {
+          throw new Error(`Media attachment failed: ${resMedia.productCreateMedia.mediaUserErrors[0].message}`);
+        }
+      }
     }
 
     const updatedProduct = mapShopifyProduct(res.productUpdate.product);
@@ -493,8 +707,8 @@ export const shopifySaree = {
     if (!locationId) throw new Error("Shopify Locations not configured");
 
     const mutation = `
-      mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) @idempotent {
-        inventorySetQuantities(input: $input) {
+      mutation inventorySetQuantities($input: InventorySetQuantitiesInput!, $idempotencyKey: String!) {
+        inventorySetQuantities(input: $input) @idempotent(key: $idempotencyKey) {
           inventoryAdjustmentGroup {
             createdAt
           }
@@ -517,7 +731,8 @@ export const shopifySaree = {
             changeFromQuantity: null
           }
         ]
-      }
+      },
+      idempotencyKey: crypto.randomUUID()
     };
 
     const res = await shopifyAdminFetch<{ inventorySetQuantities: { userErrors: Array<{ message: string }> } }>({
@@ -697,9 +912,9 @@ export const shopifySaree = {
     
     let fileUrl = '';
     if (mimeType.startsWith('video/')) {
-      fileUrl = registeredFile.sources?.[0]?.url || '';
+      fileUrl = registeredFile.sources?.[0]?.url || target.resourceUrl;
     } else {
-      fileUrl = registeredFile.image?.url || '';
+      fileUrl = registeredFile.image?.url || target.resourceUrl;
     }
 
     return {
@@ -727,7 +942,9 @@ export const shopifyCollection = {
               id
               title
               handle
-              productsCount
+              productsCount {
+                count
+              }
             }
           }
         }
@@ -744,7 +961,7 @@ export const shopifyCollection = {
         id: edge.node.id,
         title: edge.node.title,
         handle: edge.node.handle,
-        productsCount: edge.node.productsCount || 0
+        productsCount: edge.node.productsCount?.count || 0
       }));
     } catch (err) {
       console.error("Failed to list collections:", err);

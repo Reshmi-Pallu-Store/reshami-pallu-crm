@@ -231,7 +231,7 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
               Purchased sarees
             </h3>
             <div className="space-y-4">
-              {items.map((item, i) => (
+              {items.map((item: any, i: number) => (
                 <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-[#1A1A1A]/5 last:border-b-0 last:pb-0">
                   <div>
                     <h4 className="text-xs font-bold text-[#1A1A1A]">{item.title}</h4>
