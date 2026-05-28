@@ -252,7 +252,7 @@ export default function BulkUploadPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title="Bulk Saree Upload" />
 
-        <main className="flex-1 overflow-y-auto p-8 max-w-[1000px] mx-auto w-full space-y-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1000px] mx-auto w-full space-y-6 sm:space-y-8">
           
           {/* Instructions and Download Template Card */}
           <div className="ui-card p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white/40">

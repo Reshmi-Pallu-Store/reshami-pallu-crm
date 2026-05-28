@@ -74,12 +74,12 @@ export default async function DashboardPage() {
         <Header title="Workspace Overview" />
 
         {/* Dashboard Frame */}
-        <main className="flex-1 overflow-y-auto p-8 max-w-[1360px] mx-auto w-full space-y-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1360px] mx-auto w-full space-y-6 sm:space-y-8">
           
           {/* Quick Actions Bar */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/40 border border-[#4A154B]/10 rounded-2xl p-6 backdrop-blur-md">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/40 border border-[#4A154B]/10 rounded-2xl p-4 sm:p-6 backdrop-blur-md">
             <div>
-              <h3 className="font-display font-bold text-lg text-[#4A154B] flex items-center gap-2">
+              <h3 className="font-display font-bold text-base sm:text-lg text-[#4A154B] flex items-center gap-2">
                 <Sparkles size={18} className="text-[#D4AF37]" />
                 Welcome Back, Mrinalini!
               </h3>

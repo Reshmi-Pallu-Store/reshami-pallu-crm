@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { shopifySaree } from "@/lib/shopify";
-import { sareeDb } from "@/lib/db";
+import { sareeDb, db } from "@/lib/db";
 import { cookies } from "next/headers";
 
 // Authentication Helper
@@ -8,6 +8,35 @@ async function verifySession() {
   const cookieStore = await cookies();
   const session = cookieStore.get("crm_session");
   return session && session.value === "authenticated";
+}
+
+// Helper to poll Redis and wait for async media queue conversion to finish
+async function resolveQueuedMedia(mediaReference: { id: string, url: string }) {
+  if (!mediaReference || !mediaReference.id || !mediaReference.id.startsWith("media_")) {
+    return mediaReference;
+  }
+
+  const mediaId = mediaReference.id;
+  console.log(`[Products API] Resolving queued media reference: ${mediaId}...`);
+
+  // Poll Redis for up to 40 attempts (20 seconds)
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const itemStr = await db.hget<any>("media:queue", mediaId);
+    if (itemStr) {
+      const item = typeof itemStr === "string" ? JSON.parse(itemStr) : itemStr;
+      if (item.status === "completed") {
+        console.log(`[Products API] Queued media ${mediaId} completed optimization! Shopify ID: ${item.shopifyId}`);
+        // Clean up from Redis hash queue since it is successfully bound
+        await db.hdel("media:queue", mediaId);
+        return { id: item.shopifyId, url: item.shopifyUrl };
+      } else if (item.status === "failed") {
+        throw new Error(`Media optimization failed: ${item.error || "unknown error"}`);
+      }
+    }
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  throw new Error("Media optimization timed out inside queue. Please try again.");
 }
 
 // POST: Create a new Saree
@@ -22,6 +51,11 @@ export async function POST(req: NextRequest) {
 
     if (!sareeData.sku || !sareeData.title || !sareeData.price) {
       return NextResponse.json({ error: "SKU, Title, and Price are required" }, { status: 400 });
+    }
+
+    // Resolve queued shortVideo if present
+    if (sareeData.metafields?.shortVideo) {
+      sareeData.metafields.shortVideo = await resolveQueuedMedia(sareeData.metafields.shortVideo);
     }
 
     console.log(`⏳ Pushing new Saree to Shopify: ${sareeData.sku}...`);
@@ -61,6 +95,11 @@ export async function PUT(req: NextRequest) {
 
     if (!id) {
       return NextResponse.json({ error: "Product ID is required for update" }, { status: 400 });
+    }
+
+    // Resolve queued shortVideo if present
+    if (sareeData.metafields?.shortVideo) {
+      sareeData.metafields.shortVideo = await resolveQueuedMedia(sareeData.metafields.shortVideo);
     }
 
     console.log(`⏳ Updating Saree ${id} in Shopify...`);

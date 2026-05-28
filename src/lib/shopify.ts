@@ -66,6 +66,7 @@ export interface SareeProduct {
   imageUrl?: string;
   sku: string;
   price: number;
+  compareAtPrice?: number | null;
   stock: number;
   locationId?: string;
   inventoryItemId?: string;
@@ -106,6 +107,7 @@ const PRODUCT_FRAGMENT = `
           id
           sku
           price
+          compareAtPrice
           inventoryItem {
             id
             inventoryLevels(first: 1) {
@@ -174,6 +176,7 @@ function mapShopifyProduct(node: any): SareeProduct {
     imageUrl: node.featuredImage?.url,
     sku: variantEdge?.sku || '',
     price: parseFloat(variantEdge?.price || '0'),
+    compareAtPrice: variantEdge?.compareAtPrice ? parseFloat(variantEdge.compareAtPrice) : null,
     stock: onHandQty,
     locationId: invLevelEdge?.location?.id,
     inventoryItemId: variantEdge?.inventoryItem?.id,
@@ -303,6 +306,7 @@ export const shopifySaree = {
         variants: [
           {
             price: saree.price.toString(),
+            compareAtPrice: saree.compareAtPrice ? saree.compareAtPrice.toString() : null,
             sku: saree.sku,
             inventoryItem: {
               tracked: true
@@ -384,13 +388,11 @@ export const shopifySaree = {
       productInput.metafields = metafields;
     }
 
-    // Update variant price or SKU if defined
-    if (saree.price !== undefined || saree.sku !== undefined) {
+    // Update variant price, compareAtPrice or SKU if defined
+    if (saree.price !== undefined || saree.compareAtPrice !== undefined || saree.sku !== undefined) {
       const existing = await this.get(id);
       if (existing) {
-        const variantId = existing.id.replace('gid://shopify/Product/', 'gid://shopify/ProductVariant/'); // simple fallback fallback variant ID or fetch
-        // In real GraphQL, we should update the variant separately using productVariantsUpdate
-        await this.updateVariant(existing.id, saree.price, saree.sku);
+        await this.updateVariant(existing.id, saree.price, saree.compareAtPrice, saree.sku);
       }
     }
 
@@ -489,8 +491,8 @@ export const shopifySaree = {
     }
   },
 
-  // Helper to update a product variant's price or SKU
-  async updateVariant(productId: string, price?: number, sku?: string): Promise<void> {
+  // Helper to update a product variant's price, compareAtPrice or SKU
+  async updateVariant(productId: string, price?: number, compareAtPrice?: number | null, sku?: string): Promise<void> {
     // Get the variant ID
     const query = `
       query getVariant($id: ID!) {
@@ -525,6 +527,7 @@ export const shopifySaree = {
 
     const input: any = { id: variantId };
     if (price !== undefined) input.price = price.toString();
+    if (compareAtPrice !== undefined) input.compareAtPrice = compareAtPrice ? compareAtPrice.toString() : null;
     if (sku !== undefined) input.sku = sku;
 
     await shopifyAdminFetch({

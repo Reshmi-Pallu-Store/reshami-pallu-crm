@@ -82,10 +82,10 @@ export default function InventoryGrid({ initialProducts }: InventoryGridProps) {
     <div className="space-y-6">
       {/* Search and Filters Bar */}
       <div className="ui-card p-5 flex flex-col gap-4">
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           
           {/* Search */}
-          <div className="relative md:col-span-2">
+          <div className="relative sm:col-span-2 lg:col-span-2">
             <span className="absolute left-3.5 top-3 text-[#1A1A1A]/40">
               <Search size={16} />
             </span>

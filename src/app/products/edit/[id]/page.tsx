@@ -44,7 +44,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title={`Edit Saree: ${product.sku}`} />
         
-        <main className="flex-1 overflow-y-auto p-8 max-w-[1000px] mx-auto w-full">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1000px] mx-auto w-full">
           <EditProductForm initialProduct={mergedProduct} />
         </main>
       </div>

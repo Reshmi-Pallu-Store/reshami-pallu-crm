@@ -54,6 +54,7 @@ export default function AddProductPage() {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState<"ACTIVE" | "DRAFT">("DRAFT");
   const [price, setPrice] = useState("");
+  const [compareAtPrice, setCompareAtPrice] = useState("");
   const [costPrice, setCostPrice] = useState("");
   const [stock, setStock] = useState("1");
   const [tags, setTags] = useState<string[]>([]);
@@ -77,22 +78,75 @@ export default function AddProductPage() {
   const [foundersExclusive, setFoundersExclusive] = useState(false);
   const [privateNotes, setPrivateNotes] = useState("");
 
+  // Dynamic Options lists loaded from Upstash Redis
+  const [customRegions, setCustomRegions] = useState<string[]>([]);
+  const [customFabrics, setCustomFabrics] = useState<string[]>([]);
+  const [customWeaves, setCustomWeaves] = useState<string[]>([]);
+  const [customOccasions, setCustomOccasions] = useState<string[]>([]);
+  const [customColorFamilies, setCustomColorFamilies] = useState<string[]>([]);
+
+  // Text inputs for "Other" custom typed selections
+  const [customRegion, setCustomRegion] = useState("");
+  const [customFabric, setCustomFabric] = useState("");
+  const [customWeave, setCustomWeave] = useState("");
+  const [customOccasion, setCustomOccasion] = useState("");
+  const [customColorFamily, setCustomColorFamily] = useState("");
+
+  // Dynamic selector options
+  const regionOptions = ["Banaras", "Kanchipuram", "Chanderi", "Kalamkari", "Mysore", ...customRegions, "Other"];
+  const colorFamilyOptions = ["Red", "Blue", "Green", "Gold", "Silver", "Pink", "White", "Black", "Maroon", "Purple", "Cream", "Orange", "Yellow", "Turquoise", ...customColorFamilies, "Other"];
+  const fabricOptions = ["Pure Katan Silk", "Pure Silk", "Chanderi Silk", "Georgette", "Organza", "Tissue Silk", "Cotton", ...customFabrics, "Other"];
+  const weaveOptions = ["Kadhua", "Jamdani", "Ikat", "Meenakari", "Fekwa", ...customWeaves, "Other"];
+  const occasionOptions = ["Bridal", "Festive", "Cocktail", "Casual", ...customOccasions, "Other"];
+
   // SKU Generation logic
   const [sku, setSku] = useState("");
 
+  // Load custom options on page mount
+  useEffect(() => {
+    const fetchOptions = async () => {
+      try {
+        const res = await fetch("/api/options");
+        if (res.ok) {
+          const data = await res.json();
+          setCustomRegions(data.regions || []);
+          setCustomFabrics(data.fabrics || []);
+          setCustomWeaves(data.weaves || []);
+          setCustomOccasions(data.occasions || []);
+          setCustomColorFamilies(data.colorFamilies || []);
+        }
+      } catch (err) {
+        console.error("Failed to load options", err);
+      }
+    };
+    fetchOptions();
+  }, []);
+
   useEffect(() => {
     // Generate SKU automatically
-    const regCode = REGION_CODES[region] || "OTH";
-    const colorCode = COLOR_CODES[colorFamily] || "OTH";
+    const selectedRegion = region === "Other" ? customRegion : region;
+    const selectedColor = colorFamily === "Other" ? customColorFamily : colorFamily;
+
+    let regCode = REGION_CODES[selectedRegion];
+    if (!regCode) {
+      regCode = selectedRegion ? selectedRegion.slice(0, 3).toUpperCase() : "OTH";
+    }
+
+    let colorCode = COLOR_CODES[selectedColor];
+    if (!colorCode) {
+      colorCode = selectedColor ? selectedColor.slice(0, 3).toUpperCase() : "OTH";
+    }
+
     const numStr = String(skuNumber).padStart(3, "0");
     setSku(`RP-${regCode}-${colorCode}-${numStr}`);
-  }, [region, colorFamily, skuNumber]);
+  }, [region, customRegion, colorFamily, customColorFamily, skuNumber]);
 
   // Fetch stock counts to auto-increment SKU numbers
   useEffect(() => {
     const fetchLatestNumber = async () => {
       try {
-        const res = await fetch("/api/products/sku-count?region=" + region);
+        const selectedRegion = region === "Other" ? customRegion : region;
+        const res = await fetch("/api/products/sku-count?region=" + encodeURIComponent(selectedRegion));
         if (res.ok) {
           const data = await res.json();
           setSkuNumber(data.count + 1);
@@ -103,7 +157,7 @@ export default function AddProductPage() {
       }
     };
     fetchLatestNumber();
-  }, [region]);
+  }, [region, customRegion]);
 
   // Live Margin Calculation
   const priceVal = parseFloat(price) || 0;
@@ -184,31 +238,93 @@ export default function AddProductPage() {
     e.preventDefault();
     setLoading(true);
 
-    const payload = {
-      title,
-      descriptionHtml: `<p>${description.replace(/\n/g, "<br />")}</p>`,
-      status,
-      price: parseFloat(price),
-      costPrice: parseFloat(costPrice || "0"),
-      stock: parseInt(stock || "0"),
-      sku,
-      tags,
-      metafields: {
-        fabric,
-        weave,
-        colorFamily,
-        occasion,
-        region,
-        blouseIncluded,
-        blouseLength,
-        washCare,
-        shortVideo: video ? { id: video.id, url: video.url } : undefined,
-        foundersExclusive
-      },
-      privateNotes
-    };
+    const finalRegion = region === "Other" ? customRegion.trim() : region;
+    const finalFabric = fabric === "Other" ? customFabric.trim() : fabric;
+    const finalWeave = weave === "Other" ? customWeave.trim() : weave;
+    const finalOccasion = occasion === "Other" ? customOccasion.trim() : occasion;
+    const finalColorFamily = colorFamily === "Other" ? customColorFamily.trim() : colorFamily;
+
+    if (
+      (region === "Other" && !finalRegion) ||
+      (fabric === "Other" && !finalFabric) ||
+      (weave === "Other" && !finalWeave) ||
+      (occasion === "Other" && !finalOccasion) ||
+      (colorFamily === "Other" && !finalColorFamily)
+    ) {
+      alert("❌ Error: Please specify a custom text name for the fields selected as 'Other'.");
+      setLoading(false);
+      return;
+    }
 
     try {
+      // 1. Save new custom options to Upstash Redis
+      const savePromises = [];
+      if (region === "Other") {
+        savePromises.push(fetch("/api/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "regions", value: finalRegion })
+        }));
+      }
+      if (fabric === "Other") {
+        savePromises.push(fetch("/api/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "fabrics", value: finalFabric })
+        }));
+      }
+      if (weave === "Other") {
+        savePromises.push(fetch("/api/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "weaves", value: finalWeave })
+        }));
+      }
+      if (occasion === "Other") {
+        savePromises.push(fetch("/api/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "occasions", value: finalOccasion })
+        }));
+      }
+      if (colorFamily === "Other") {
+        savePromises.push(fetch("/api/options", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "colorFamilies", value: finalColorFamily })
+        }));
+      }
+
+      if (savePromises.length > 0) {
+        await Promise.all(savePromises);
+      }
+
+      // 2. Prepare Shopify / Redis payload
+      const payload = {
+        title,
+        descriptionHtml: `<p>${description.replace(/\n/g, "<br />")}</p>`,
+        status,
+        price: parseFloat(price),
+        compareAtPrice: compareAtPrice ? parseFloat(compareAtPrice) : null,
+        costPrice: parseFloat(costPrice || "0"),
+        stock: parseInt(stock || "0"),
+        sku,
+        tags,
+        metafields: {
+          fabric: finalFabric,
+          weave: finalWeave,
+          colorFamily: finalColorFamily,
+          occasion: finalOccasion,
+          region: finalRegion,
+          blouseIncluded,
+          blouseLength,
+          washCare,
+          shortVideo: video ? { id: video.id, url: video.url } : undefined,
+          foundersExclusive
+        },
+        privateNotes
+      };
+
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -235,12 +351,12 @@ export default function AddProductPage() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header title="Add New Saree" />
         
-        <main className="flex-1 overflow-y-auto p-8 max-w-[1000px] mx-auto w-full">
-          <form onSubmit={handleSubmit} className="space-y-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1000px] mx-auto w-full">
+          <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
             
             {/* Header Form Actions */}
-            <div className="flex justify-between items-center bg-white/40 border border-[#4A154B]/10 rounded-xl p-4 backdrop-blur-md">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center bg-white/40 border border-[#4A154B]/10 rounded-xl p-4 gap-4 backdrop-blur-md">
+              <div className="flex items-center justify-between sm:justify-start gap-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-[#4A154B]/60">Save Status:</span>
                 <select 
                   value={status} 
@@ -318,7 +434,7 @@ export default function AddProductPage() {
                 Financials &amp; Stock levels
               </h3>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                 {/* Retail Price */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Selling Price (INR)</label>
@@ -330,6 +446,21 @@ export default function AddProductPage() {
                       value={price}
                       onChange={(e) => setPrice(e.target.value)}
                       placeholder="18000"
+                      className="glass-input pl-6 w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Compare at Price */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Compare-at Price (INR)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-xs font-bold text-[#1A1A1A]/50">₹</span>
+                    <input
+                      type="number"
+                      value={compareAtPrice}
+                      onChange={(e) => setCompareAtPrice(e.target.value)}
+                      placeholder="25000"
                       className="glass-input pl-6 w-full"
                     />
                   </div>
@@ -388,52 +519,90 @@ export default function AddProductPage() {
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Region of Origin</label>
                   <select value={region} onChange={(e) => setRegion(e.target.value)} className="glass-input bg-white">
-                    {Object.keys(REGION_CODES).map(r => <option key={r} value={r}>{r}</option>)}
+                    {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
+                  {region === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customRegion}
+                      onChange={(e) => setCustomRegion(e.target.value)}
+                      placeholder="Type custom region..."
+                      className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
+                    />
+                  )}
                 </div>
 
                 {/* Color Family */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Color Family</label>
                   <select value={colorFamily} onChange={(e) => setColorFamily(e.target.value)} className="glass-input bg-white">
-                    {Object.keys(COLOR_CODES).map(c => <option key={c} value={c}>{c}</option>)}
+                    {colorFamilyOptions.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                  {colorFamily === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customColorFamily}
+                      onChange={(e) => setCustomColorFamily(e.target.value)}
+                      placeholder="Type custom color..."
+                      className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
+                    />
+                  )}
                 </div>
 
                 {/* Fabric */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Fabric Type</label>
                   <select value={fabric} onChange={(e) => setFabric(e.target.value)} className="glass-input bg-white">
-                    <option value="Pure Katan Silk">Pure Katan Silk</option>
-                    <option value="Chanderi Silk">Chanderi Silk</option>
-                    <option value="Georgette">Georgette</option>
-                    <option value="Organza">Organza</option>
-                    <option value="Tissue Silk">Tissue Silk</option>
-                    <option value="Cotton">Cotton</option>
+                    {fabricOptions.map(f => <option key={f} value={f}>{f}</option>)}
                   </select>
+                  {fabric === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customFabric}
+                      onChange={(e) => setCustomFabric(e.target.value)}
+                      placeholder="Type custom fabric..."
+                      className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
+                    />
+                  )}
                 </div>
 
                 {/* Weave */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Weave Style</label>
                   <select value={weave} onChange={(e) => setWeave(e.target.value)} className="glass-input bg-white">
-                    <option value="Kadhua">Kadhua</option>
-                    <option value="Jamdani">Jamdani</option>
-                    <option value="Ikat">Ikat</option>
-                    <option value="Meenakari">Meenakari</option>
-                    <option value="Fekwa">Fekwa</option>
+                    {weaveOptions.map(w => <option key={w} value={w}>{w}</option>)}
                   </select>
+                  {weave === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customWeave}
+                      onChange={(e) => setCustomWeave(e.target.value)}
+                      placeholder="Type custom weave..."
+                      className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
+                    />
+                  )}
                 </div>
 
                 {/* Occasion */}
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Occasion Curation</label>
                   <select value={occasion} onChange={(e) => setOccasion(e.target.value)} className="glass-input bg-white">
-                    <option value="Bridal">Bridal</option>
-                    <option value="Festive">Festive</option>
-                    <option value="Cocktail">Cocktail</option>
-                    <option value="Casual">Casual</option>
+                    {occasionOptions.map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
+                  {occasion === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customOccasion}
+                      onChange={(e) => setCustomOccasion(e.target.value)}
+                      placeholder="Type custom occasion..."
+                      className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
+                    />
+                  )}
                 </div>
 
                 {/* Blouse Included */}
@@ -504,7 +673,11 @@ export default function AddProductPage() {
                 <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center">
                   <ImageIcon size={32} className="text-[#4A154B]/40 mb-3" />
                   <span className="text-xs font-bold text-[#4A154B]">Upload Saree Photos</span>
-                  <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4">Accepts PNG, JPG formats. Saves directly to Shopify CDN</span>
+                  <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
+                    <strong>Recommended:</strong> JPEG, PNG, or WebP<br />
+                    <strong>Dimensions:</strong> 2:3 Vertical Ratio (e.g., 1000 x 1500 px)<br />
+                    <strong>File Size:</strong> Under 5 MB per photo
+                  </span>
                   
                   <input 
                     type="file" 
@@ -521,7 +694,12 @@ export default function AddProductPage() {
                 <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center">
                   <VideoIcon size={32} className="text-[#D4AF37]/60 mb-3" />
                   <span className="text-xs font-bold text-[#4A154B]">Upload Short Video (Optional)</span>
-                  <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4">Looping mp4 video displayed on the bottom of the page</span>
+                  <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
+                    <strong>Format:</strong> MP4 (H.264 codec)<br />
+                    <strong>Length:</strong> 5 - 15 seconds (Muted/No audio)<br />
+                    <strong>Aspect Ratio:</strong> Vertical 9:16 or 2:3 (e.g., 1080 x 1920 px)<br />
+                    <strong>File Size:</strong> Under 10 MB (for instant looping page loads)
+                  </span>
                   
                   <input 
                     type="file" 

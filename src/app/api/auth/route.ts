@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     cookieStore.set("crm_session", "authenticated", {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      sameSite: "lax",
       maxAge: 60 * 60 * 24 * 7, // 1 week
       path: "/",
     });
