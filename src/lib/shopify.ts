@@ -1009,9 +1009,11 @@ export const shopifyCollection = {
         productsCount: edge.node.productsCount?.count || 0,
         rules: edge.node.ruleSet?.rules || []
       }));
+      // Sort collections by productsCount descending so the active collection with sarees takes priority during de-duplication
+      const sorted = mapped.sort((a, b) => b.productsCount - a.productsCount);
       
-      // De-duplicate by title to prevent Shopify duplicate collections with same name
-      return Array.from(new Map(mapped.map(c => [c.title.trim().toLowerCase(), c])).values());
+      // De-duplicate by title (keeping the one with highest productsCount due to sort)
+      return Array.from(new Map(sorted.map(c => [c.title.trim().toLowerCase(), c])).values());
     } catch (err) {
       console.error("Failed to list collections:", err);
       return [];

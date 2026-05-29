@@ -178,17 +178,37 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
                       </td>
 
                       {/* Fulfillment/Delhivery */}
-                      <td className="py-4 px-6 text-center">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                          order.displayFulfillmentStatus === "FULFILLED" 
-                            ? "bg-green-50 text-green-700 border-green-200" 
-                            : "bg-yellow-50 text-yellow-700 border-yellow-200"
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${
-                            order.displayFulfillmentStatus === "FULFILLED" ? "bg-green-500" : "bg-yellow-500"
-                          }`} />
-                          {order.displayFulfillmentStatus === "FULFILLED" ? "Shipped" : "Processing"}
-                        </span>
+                      <td className="py-4 px-6 text-center whitespace-nowrap">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                            order.displayFulfillmentStatus === "FULFILLED" 
+                              ? "bg-green-50 text-green-700 border-green-200" 
+                              : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              order.displayFulfillmentStatus === "FULFILLED" ? "bg-green-500" : "bg-yellow-500"
+                            }`} />
+                            {order.displayFulfillmentStatus === "FULFILLED" ? "Shipped" : "Processing"}
+                          </span>
+
+                          {/* Inline dynamic Delhivery tracking status */}
+                          {(() => {
+                            // Extract AWB
+                            const awbAttribute = order.customAttributes?.find(
+                              (attr: any) => attr.key.toLowerCase() === "awb" || attr.key.toLowerCase() === "trackingid"
+                            );
+                            let inlineAwb = awbAttribute ? awbAttribute.value : null;
+                            if (!inlineAwb && order.note) {
+                              const awbMatch = order.note.match(/AWB:\s*([^\s,]+)/i);
+                              if (awbMatch) inlineAwb = awbMatch[1];
+                            }
+
+                            if (inlineAwb) {
+                              return <DelhiveryStatusBadge awb={inlineAwb} />;
+                            }
+                            return null;
+                          })()}
+                        </div>
                       </td>
 
                       {/* View Action */}
@@ -219,5 +239,53 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
       )}
 
     </div>
+  );
+}
+
+// Inline lazy-loaded Delhivery tracking status component
+import { useEffect as reactUseEffect } from "react";
+function DelhiveryStatusBadge({ awb }: { awb: string }) {
+  const [status, setStatus] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  reactUseEffect(() => {
+    let active = true;
+    fetch(`/api/orders/track?awb=${encodeURIComponent(awb)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && data?.ok && data?.tracking?.status) {
+          setStatus(data.tracking.status);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [awb]);
+
+  if (loading) {
+    return <span className="text-[9px] text-[#1A1A1A]/40 animate-pulse">Checking status...</span>;
+  }
+
+  if (!status) {
+    return <span className="text-[9px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded font-mono">No tracking</span>;
+  }
+
+  // Curated status styling matching modern design
+  const getBadgeStyle = (s: string) => {
+    const norm = s.toLowerCase();
+    if (norm.includes("deliv")) return "bg-green-50 text-green-700 border-green-200";
+    if (norm.includes("transit") || norm.includes("out for")) return "bg-blue-50 text-blue-700 border-blue-200";
+    return "bg-[#D4AF37]/10 text-[#4A154B] border-[#D4AF37]/30";
+  };
+
+  return (
+    <span className={`inline-block text-[9px] font-bold uppercase rounded px-1.5 py-0.5 border ${getBadgeStyle(status)}`}>
+      {status}
+    </span>
   );
 }

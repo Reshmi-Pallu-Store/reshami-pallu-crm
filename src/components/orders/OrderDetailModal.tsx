@@ -290,71 +290,7 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
             </div>
           </div>
 
-          {/* Secure Cost Margins (Founder's Eyes Only) */}
-          <div className="ui-card p-5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-2xl relative overflow-hidden">
-            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/10 pb-2.5 flex items-center gap-1.5">
-              <TrendingUp size={14} className="text-[#D4AF37]" />
-              Private Net Margin Metrics
-            </h3>
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Order Value</span>
-                <p className="text-lg font-display font-bold text-[#4A154B] mt-0.5">₹{totalRetail.toLocaleString("en-IN")}</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Weaver Cost</span>
-                <p className="text-lg font-display font-bold text-[#4A154B] mt-0.5">₹{totalOrderCost.toLocaleString("en-IN")}</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Net Profit</span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-lg font-display font-bold text-green-700">₹{netProfit.toLocaleString("en-IN")}</span>
-                  <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(overallMargin)}`}>
-                    {Math.round(overallMargin)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="absolute -right-6 -bottom-6 text-[#4A154B] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
-              ₹
-            </div>
-          </div>
-
-          {/* Saree Line Items */}
-          <div className="ui-card p-5 bg-white">
-            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/5 pb-2.5 flex items-center gap-1.5 mb-4">
-              <Package size={14} />
-              Purchased sarees
-            </h3>
-            <div className="space-y-4">
-              {items.map((item: any, i: number) => (
-                <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-[#1A1A1A]/5 last:border-b-0 last:pb-0">
-                  <div>
-                    <h4 className="text-xs font-bold text-[#1A1A1A]">{item.title}</h4>
-                    <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-1">SKU: {item.sku || "N/A"} | Qty: {item.qty}</p>
-                    {item.privateNotes && (
-                      <p className="text-[10px] bg-yellow-50 border border-yellow-200/50 text-[#D4AF37]/90 rounded px-2 py-1 mt-1.5 italic max-w-md">
-                        <strong>Note:</strong> {item.privateNotes}
-                      </p>
-                    )}
-                  </div>
-                  
-                  <div className="text-right flex items-center gap-4">
-                    <div className="text-xs">
-                      <p className="text-[#1A1A1A]/50">Retail: <span className="font-semibold text-[#1A1A1A]">₹{item.price.toLocaleString("en-IN")}</span></p>
-                      <p className="text-[#1A1A1A]/50 mt-0.5">Weaver: <span className="font-semibold text-[#1A1A1A]">₹{item.costPrice.toLocaleString("en-IN")}</span></p>
-                    </div>
-                    
-                    <span className={`text-[10px] font-bold rounded-lg px-2.5 py-1 ${getMarginColor(item.margin)}`}>
-                      +{Math.round(item.margin)}% Margin
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Logistics & Tracking (Delhivery) */}
+          {/* Logistics & Tracking (Delhivery) — PUSHED TO TOP */}
           <div className="ui-card p-5 bg-white">
             <div className="flex items-center justify-between border-b border-[#4A154B]/5 pb-2.5 mb-4">
               <h3 className="text-xs font-bold uppercase text-[#4A154B] flex items-center gap-1.5">
@@ -467,6 +403,70 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Secure Cost Margins (Founder's Eyes Only) */}
+          <div className="ui-card p-5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-2xl relative overflow-hidden">
+            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/10 pb-2.5 flex items-center gap-1.5">
+              <TrendingUp size={14} className="text-[#D4AF37]" />
+              Private Net Margin Metrics
+            </h3>
+            <div className="grid grid-cols-3 gap-4 mt-4">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Order Value</span>
+                <p className="text-lg font-display font-bold text-[#4A154B] mt-0.5">₹{totalRetail.toLocaleString("en-IN")}</p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Weaver Cost</span>
+                <p className="text-lg font-display font-bold text-[#4A154B] mt-0.5">₹{totalOrderCost.toLocaleString("en-IN")}</p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Net Profit</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-lg font-display font-bold text-green-700">₹{netProfit.toLocaleString("en-IN")}</span>
+                  <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(overallMargin)}`}>
+                    {Math.round(overallMargin)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="absolute -right-6 -bottom-6 text-[#4A154B] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
+              ₹
+            </div>
+          </div>
+
+          {/* Saree Line Items */}
+          <div className="ui-card p-5 bg-white">
+            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/5 pb-2.5 flex items-center gap-1.5 mb-4">
+              <Package size={14} />
+              Ordered Items
+            </h3>
+            <div className="space-y-4">
+              {items.map((item: any, i: number) => (
+                <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-[#1A1A1A]/5 last:border-b-0 last:pb-0">
+                  <div>
+                    <h4 className="text-xs font-bold text-[#1A1A1A]">{item.title}</h4>
+                    <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-1">SKU: {item.sku || "N/A"} | Qty: {item.qty}</p>
+                    {item.privateNotes && (
+                      <p className="text-[10px] bg-yellow-50 border border-yellow-200/50 text-[#D4AF37]/90 rounded px-2 py-1 mt-1.5 italic max-w-md">
+                        <strong>Note:</strong> {item.privateNotes}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="text-right flex items-center gap-4">
+                    <div className="text-xs">
+                      <p className="text-[#1A1A1A]/50">Retail: <span className="font-semibold text-[#1A1A1A]">₹{item.price.toLocaleString("en-IN")}</span></p>
+                      <p className="text-[#1A1A1A]/50 mt-0.5">Weaver: <span className="font-semibold text-[#1A1A1A]">₹{item.costPrice.toLocaleString("en-IN")}</span></p>
+                    </div>
+                    
+                    <span className={`text-[10px] font-bold rounded-lg px-2.5 py-1 ${getMarginColor(item.margin)}`}>
+                       +{Math.round(item.margin)}% Margin
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Secure Payment details (Razorpay) */}
