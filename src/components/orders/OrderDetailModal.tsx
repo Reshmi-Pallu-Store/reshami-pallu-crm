@@ -114,6 +114,58 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
     }
   };
 
+  const handleFulfillOrderShiprocket = async () => {
+    if (!order.shippingAddress) {
+      setFulfillmentError("Cannot fulfill: No shipping address provided.");
+      return;
+    }
+    setFulfilling(true);
+    setFulfillmentError(null);
+    try {
+      const mappedItems = order.lineItems?.edges?.map((e: any) => {
+        const node = e.node;
+        const price = parseFloat(node.originalUnitPriceSet?.presentmentMoney?.amount || "0");
+        return {
+          name: node.title,
+          sku: node.sku || "SAREE",
+          qty: node.quantity || 1,
+          price: price,
+        };
+      }) || [];
+
+      const res = await fetch("/api/orders/fulfill/shiprocket", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: order.id,
+          orderName: order.name,
+          customerName: `${order.shippingAddress.firstName} ${order.shippingAddress.lastName || ""}`.trim(),
+          customerEmail: order.customer?.email || "",
+          phone: order.shippingAddress.phone || order.customer?.phone || "",
+          address1: order.shippingAddress.address1,
+          address2: order.shippingAddress.address2 || "",
+          city: order.shippingAddress.city,
+          province: order.shippingAddress.province,
+          zip: order.shippingAddress.zip,
+          weight: manualWeight,
+          items: mappedItems,
+          subtotal: parseFloat(order.totalPriceSet?.presentmentMoney?.amount || "0"),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setFulfillmentError(data.error || "Failed to fulfill order with Shiprocket.");
+      } else {
+        alert(data.message || "Order successfully booked with Shiprocket and marked as fulfilled!");
+        window.location.reload();
+      }
+    } catch {
+      setFulfillmentError("Network error. Could not book Shiprocket shipment.");
+    } finally {
+      setFulfilling(false);
+    }
+  };
+
   useEffect(() => {
     fetchTrackingData();
   }, [awb]);
@@ -290,12 +342,12 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
             </div>
           </div>
 
-          {/* Logistics & Tracking (Delhivery) — PUSHED TO TOP */}
+          {/* Logistics & Tracking (Delhivery / Shiprocket) — PUSHED TO TOP */}
           <div className="ui-card p-5 bg-white">
             <div className="flex items-center justify-between border-b border-[#4A154B]/5 pb-2.5 mb-4">
               <h3 className="text-xs font-bold uppercase text-[#4A154B] flex items-center gap-1.5">
                 <Truck size={14} className="text-[#D4AF37]" />
-                Logistics Tracking (Delhivery)
+                Logistics Tracking & Fulfillment
               </h3>
               
               {awb && (
@@ -314,6 +366,24 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                 </div>
               )}
             </div>
+
+            {/* Parse courier selected tag */}
+            {(() => {
+              const courierTag = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("courier:"));
+              const preferredCourier = courierTag ? courierTag.split(":")[1]?.trim() : null;
+              
+              if (preferredCourier && !awb) {
+                return (
+                  <div className="mb-4 p-2.5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-xl flex items-center justify-between text-xs">
+                    <span className="font-semibold text-[#4A154B]">Customer Selected Delivery:</span>
+                    <span className="bg-[#4A154B] text-white font-bold px-2 py-0.5 rounded-lg text-[10px] uppercase">
+                      {preferredCourier}
+                    </span>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             {awb ? (
               /* Status Display */
@@ -367,7 +437,7 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
               /* Fulfillment Fulfill actions */
               <div className="space-y-4 text-xs">
                 <p className="text-[#1A1A1A]/60">
-                  This order has not been fulfilled yet. Manifest shipment directly with Delhivery and push fulfillment status to Shopify.
+                  This order has not been fulfilled yet. Manifest shipment directly with Delhivery or Shiprocket and push fulfillment status to Shopify.
                 </p>
 
                 <div className="flex flex-col gap-1.5 p-3.5 bg-[#FAF8F5] rounded-xl border border-[#4A154B]/5">
@@ -392,15 +462,37 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                     {fulfillmentError}
                   </div>
                 )}
-                <button
-                  type="button"
-                  disabled={fulfilling || !order.shippingAddress}
-                  onClick={handleFulfillOrder}
-                  className="w-full inline-flex items-center justify-center gap-2 bg-[#4A154B] hover:bg-[#4A154B]/90 text-white font-bold py-3 px-4 rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer text-xs uppercase tracking-wider"
-                >
-                  <Truck size={14} />
-                  {fulfilling ? "Manifesting with Delhivery..." : "Fulfill & Manifest with Delhivery"}
-                </button>
+                
+                {(() => {
+                  const courierTag = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("courier:"));
+                  const preferredCourier = courierTag ? courierTag.split(":")[1]?.trim()?.toLowerCase() : "delhivery";
+
+                  if (preferredCourier === "shiprocket") {
+                    return (
+                      <button
+                        type="button"
+                        disabled={fulfilling || !order.shippingAddress}
+                        onClick={handleFulfillOrderShiprocket}
+                        className="w-full inline-flex items-center justify-center gap-2 bg-rose-700 hover:bg-rose-800 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer text-xs uppercase tracking-wider"
+                      >
+                        <Package size={14} />
+                        {fulfilling ? "Processing with Shiprocket..." : "Fulfill & Manifest with Shiprocket"}
+                      </button>
+                    );
+                  } else {
+                    return (
+                      <button
+                        type="button"
+                        disabled={fulfilling || !order.shippingAddress}
+                        onClick={handleFulfillOrder}
+                        className="w-full inline-flex items-center justify-center gap-2 bg-[#4A154B] hover:bg-[#4A154B]/90 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer text-xs uppercase tracking-wider"
+                      >
+                        <Truck size={14} />
+                        {fulfilling ? "Processing with Delhivery..." : "Fulfill & Manifest with Delhivery"}
+                      </button>
+                    );
+                  }
+                })()}
               </div>
             )}
           </div>
