@@ -56,17 +56,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Coupon code and discount percentage are required." }, { status: 400 });
     }
 
+    const existingIndex = coupons.findIndex((c: any) => c.code === normalizedCode);
+    const existingCoupon = existingIndex > -1 ? coupons[existingIndex] : null;
+
+    const campaignType = body.campaignType || "standard";
+    const isPublic = body.isPublic !== undefined ? Boolean(body.isPublic) : (campaignType === "custom" ? false : true);
+
     const newCoupon = {
       code: normalizedCode,
       discountPercent: Number(discountPercent),
       minPurchase: Number(minPurchase || 0),
       isActive: isActive !== undefined ? Boolean(isActive) : true,
-      campaignType: body.campaignType || "standard",
+      campaignType,
       deadStockAgeMonths: body.deadStockAgeMonths !== undefined ? Number(body.deadStockAgeMonths) : 1,
+      isPublic,
+      expiresAt: body.expiresAt || null,
+      maxUses: body.maxUses !== undefined && body.maxUses !== null && body.maxUses !== "" ? Number(body.maxUses) : null,
+      usedCount: existingCoupon ? (existingCoupon.usedCount || 0) : 0,
       updatedAt: new Date().toISOString(),
     };
 
-    const existingIndex = coupons.findIndex((c: any) => c.code === normalizedCode);
     if (existingIndex > -1) {
       coupons[existingIndex] = newCoupon;
     } else {

@@ -104,13 +104,14 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
                 <th className="py-4 px-6 text-right">Revenue</th>
                 <th className="py-4 px-6 text-center">Net Margin</th>
                 <th className="py-4 px-6 text-center">Fulfillment</th>
+                <th className="py-4 px-6 text-center">Carrier</th>
                 <th className="py-4 px-6 text-center">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#4A154B]/5 text-xs">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-[#1A1A1A]/40 font-medium">
+                  <td colSpan={8} className="py-12 text-center text-[#1A1A1A]/40 font-medium">
                     <Package size={32} className="mx-auto mb-2 opacity-30" />
                     No customer orders found matching your search.
                   </td>
@@ -191,7 +192,6 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
                             {order.displayFulfillmentStatus === "FULFILLED" ? "Shipped" : "Processing"}
                           </span>
 
-                          {/* Inline dynamic Delhivery tracking status */}
                           {(() => {
                             // Extract AWB
                             const awbAttribute = order.customAttributes?.find(
@@ -204,11 +204,28 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
                             }
 
                             if (inlineAwb) {
-                              return <DelhiveryStatusBadge awb={inlineAwb} />;
+                              return <LogisticsStatusBadge awb={inlineAwb} />;
                             }
                             return null;
                           })()}
                         </div>
+                      </td>
+
+                      {/* Carrier chosen by customer */}
+                      <td className="py-4 px-6 text-center whitespace-nowrap">
+                        {(() => {
+                          const courierTag = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("courier:"));
+                          const courierName = courierTag ? courierTag.split(":")[1]?.trim() : "Delhivery";
+                          return (
+                            <span className={`inline-block text-[10px] font-bold rounded-lg px-2.5 py-0.5 border ${
+                              courierName?.toLowerCase() === "shiprocket"
+                                ? "text-rose-700 bg-rose-50 border-rose-200"
+                                : "text-purple-700 bg-purple-50 border-purple-200"
+                            }`}>
+                              {courierName}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* View Action */}
@@ -242,9 +259,9 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
   );
 }
 
-// Inline lazy-loaded Delhivery tracking status component
+// Inline lazy-loaded dynamic tracking status component
 import { useEffect as reactUseEffect } from "react";
-function DelhiveryStatusBadge({ awb }: { awb: string }) {
+function LogisticsStatusBadge({ awb }: { awb: string }) {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
