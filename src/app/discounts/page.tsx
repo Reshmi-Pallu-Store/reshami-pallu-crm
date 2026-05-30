@@ -21,8 +21,12 @@ interface Coupon {
   discountPercent: number;
   minPurchase: number;
   isActive: boolean;
-  campaignType?: "standard" | "dead_stock";
+  campaignType?: "standard" | "dead_stock" | "custom";
   deadStockAgeMonths?: number;
+  isPublic?: boolean;
+  expiresAt?: string | null;
+  maxUses?: number | null;
+  usedCount?: number;
   updatedAt: string;
 }
 
@@ -32,7 +36,9 @@ const emptyForm = {
   minPurchase: 0, 
   isActive: true,
   campaignType: "standard",
-  deadStockAgeMonths: 1
+  deadStockAgeMonths: 1,
+  expiresAt: "",
+  maxUses: "",
 };
 
 export default function DiscountsPage() {
@@ -79,6 +85,8 @@ export default function DiscountsPage() {
           isActive: form.isActive,
           campaignType: form.campaignType,
           deadStockAgeMonths: form.deadStockAgeMonths,
+          expiresAt: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
+          maxUses: form.maxUses ? Number(form.maxUses) : null,
         }),
       });
       const data = await res.json();
@@ -182,7 +190,23 @@ export default function DiscountsPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-[#4A154B]/70">Promo Code</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold uppercase tracking-wider text-[#4A154B]/70">Promo Code</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+                      let randomCode = "RP";
+                      for (let i = 0; i < 8; i++) {
+                        randomCode += chars.charAt(Math.floor(Math.random() * chars.length));
+                      }
+                      setForm(f => ({ ...f, code: randomCode }));
+                    }}
+                    className="text-[10px] font-bold uppercase text-[#4A154B] hover:underline cursor-pointer border-none bg-transparent"
+                  >
+                    Generate Code
+                  </button>
+                </div>
                 <input
                   className={inputCls}
                   placeholder="e.g. SUMMER20"
@@ -221,11 +245,12 @@ export default function DiscountsPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-[#4A154B]/70">Campaign Type</label>
                 <select
                   value={form.campaignType}
-                  onChange={(e) => setForm(f => ({ ...f, campaignType: e.target.value as "standard" | "dead_stock" }))}
+                  onChange={(e) => setForm(f => ({ ...f, campaignType: e.target.value as "standard" | "dead_stock" | "custom" }))}
                   className={inputCls}
                 >
                   <option value="standard">Standard (Storewide)</option>
                   <option value="dead_stock">Dead Stock Campaign (Select old sarees only)</option>
+                  <option value="custom">Custom (Private Alphanumeric Code)</option>
                 </select>
               </div>
 
@@ -241,6 +266,31 @@ export default function DiscountsPage() {
                     required
                   />
                 </div>
+              )}
+
+              {form.campaignType === "custom" && (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#4A154B]/70">Time-based Expiry (Optional)</label>
+                    <input
+                      type="datetime-local"
+                      className={inputCls}
+                      value={form.expiresAt}
+                      onChange={(e) => setForm(f => ({ ...f, expiresAt: e.target.value }))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#4A154B]/70">Max Shoppers / Redemptions (Optional)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Unlimited if empty"
+                      className={inputCls}
+                      value={form.maxUses}
+                      onChange={(e) => setForm(f => ({ ...f, maxUses: e.target.value }))}
+                    />
+                  </div>
+                </>
               )}
             </div>
 
@@ -324,16 +374,43 @@ export default function DiscountsPage() {
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                             coupon.campaignType === "dead_stock"
                               ? "bg-red-50 text-red-700 border border-red-100"
+                              : coupon.campaignType === "custom"
+                              ? "bg-purple-50 text-purple-700 border border-purple-100"
                               : "bg-blue-50 text-blue-700 border border-blue-100"
                           }`}>
-                            {coupon.campaignType === "dead_stock" ? `Dead Stock (${coupon.deadStockAgeMonths}m)` : "Storewide"}
+                            {coupon.campaignType === "dead_stock" ? `Dead Stock (${coupon.deadStockAgeMonths}m)` : coupon.campaignType === "custom" ? "Custom (Private)" : "Storewide"}
                           </span>
                         </div>
-                        <p className="text-xs text-[#1A1A1A]/50 mt-1">
+                        <p className="text-xs text-[#1A1A1A]/50 mt-1 flex flex-wrap gap-x-2 gap-y-1 items-center">
                           <span className="font-medium text-[#1A1A1A]/70">{coupon.discountPercent}% off</span>
-                          {coupon.minPurchase > 0
-                            ? ` · Min. purchase ₹${coupon.minPurchase.toLocaleString("en-IN")}`
-                            : " · No minimum purchase"}
+                          <span>·</span>
+                          <span>
+                            {coupon.minPurchase > 0
+                              ? `Min. purchase ₹${coupon.minPurchase.toLocaleString("en-IN")}`
+                              : "No minimum purchase"}
+                          </span>
+                          {coupon.expiresAt && (
+                            <>
+                              <span>·</span>
+                              <span className={new Date() > new Date(coupon.expiresAt) ? "text-rose-600 font-medium" : "text-[#1A1A1A]/50"}>
+                                {new Date() > new Date(coupon.expiresAt) ? "Expired" : `Expires: ${new Date(coupon.expiresAt).toLocaleString("en-IN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}`}
+                              </span>
+                            </>
+                          )}
+                          {coupon.maxUses !== undefined && coupon.maxUses !== null && (
+                            <>
+                              <span>·</span>
+                              <span className={(coupon.usedCount || 0) >= (coupon.maxUses || 0) ? "text-rose-600 font-medium" : "text-[#1A1A1A]/50"}>
+                                Shoppers: {coupon.usedCount || 0} / {coupon.maxUses} uses
+                              </span>
+                            </>
+                          )}
+                          {(!coupon.maxUses && coupon.usedCount !== undefined && coupon.usedCount > 0) && (
+                            <>
+                              <span>·</span>
+                              <span>Used: {coupon.usedCount} times</span>
+                            </>
+                          )}
                         </p>
                       </div>
 
