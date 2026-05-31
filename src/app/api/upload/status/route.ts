@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
       type: item.type,
       shopifyId: item.shopifyId || null,
       shopifyUrl: item.shopifyUrl || null,
+      base64Key: item.base64Key || null,
       error: item.error || null,
     });
   } catch (err: any) {

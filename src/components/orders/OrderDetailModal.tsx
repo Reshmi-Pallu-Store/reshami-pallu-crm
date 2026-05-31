@@ -46,6 +46,31 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
   const razorpayOrderId = orderIdMatch ? orderIdMatch[1] : null;
   const razorpayPaymentId = paymentIdMatch ? paymentIdMatch[1] : null;
 
+  // Parse shipping details from order note
+  const shippingAmountMatch = noteText.match(/Shipping Amount:\s*₹([\d.]+)/i);
+  const shippingLabelMatch = noteText.match(/Shipping:\s*([^,\n]+)/i);
+  const courierCostMatch = noteText.match(/Courier Cost:\s*₹([\d.]+)/i);
+  const shippingNoteAmount = shippingAmountMatch ? parseFloat(shippingAmountMatch[1]) : null;
+  const shippingNoteLabel = shippingLabelMatch ? shippingLabelMatch[1].trim() : null;
+  const actualCourierCostFromNote = courierCostMatch ? parseFloat(courierCostMatch[1]) : null;
+
+  // Derive shipping from Shopify's shippingLine or from the order note
+  const shopifyShippingAmount = parseFloat(
+    order.shippingLines?.edges?.[0]?.node?.originalPriceSet?.presentmentMoney?.amount ||
+    order.totalShippingPriceSet?.presentmentMoney?.amount ||
+    "0"
+  );
+  // Prefer the note-parsed amount (exact value charged by our system), fallback to Shopify's shipping line
+  const exactShippingCharged = shippingNoteAmount !== null ? shippingNoteAmount : shopifyShippingAmount;
+
+  // Derive shipping speed from tags
+  const speedTag = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("speed:"));
+  const shippingSpeedFromTag = speedTag ? speedTag.split(":")[1]?.trim() : null;
+
+  // Courier from tags
+  const courierTagFull = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("courier:"));
+  const courierNameFromTag = courierTagFull ? courierTagFull.split(":")[1]?.trim() : null;
+
   // Extract Delhivery AWB if available in attributes or note
   const awbAttribute = order.customAttributes?.find((attr: any) => attr.key.toLowerCase() === "awb" || attr.key.toLowerCase() === "trackingid");
   let awb = awbAttribute ? awbAttribute.value : null;
@@ -218,8 +243,12 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
   }) || [];
 
   const totalRetail = parseFloat(order.totalPriceSet?.presentmentMoney?.amount || "0");
-  const netProfit = totalRetail - totalOrderCost;
+  // Margin: Net Profit = Retail Revenue - Weaver Costs - Exact Shipping Cost
+  const netProfit = totalRetail - totalOrderCost - exactShippingCharged;
   const overallMargin = totalRetail > 0 ? (netProfit / totalRetail) * 100 : 0;
+  // Gross profit ignoring shipping (product profit only)
+  const grossProductProfit = totalRetail - totalOrderCost;
+  const grossProductMargin = totalRetail > 0 ? (grossProductProfit / totalRetail) * 100 : 0;
 
   const getMarginColor = (margin: number) => {
     if (margin >= 40) return "text-green-600 bg-green-50 border border-green-200/50";
@@ -497,6 +526,66 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
             )}
           </div>
 
+          {/* Shipping Cost Breakdown (CRM Admin View) */}
+          <div className="ui-card p-5 bg-white border-2 border-[#D4AF37]/30">
+            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/5 pb-2.5 flex items-center gap-1.5">
+              <Truck size={14} className="text-[#D4AF37]" />
+              Shipping Cost Breakdown
+            </h3>
+            <div className="mt-4 grid grid-cols-2 gap-4 text-xs">
+              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Shipping Speed</span>
+                <p className="font-bold text-sm mt-1 text-[#4A154B] capitalize">
+                  {shippingSpeedFromTag || (exactShippingCharged === 0 ? "Standard" : "Express")}
+                </p>
+                {shippingNoteLabel && (
+                  <p className="text-[10px] text-[#1A1A1A]/50 mt-0.5">{shippingNoteLabel}</p>
+                )}
+              </div>
+              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Courier Partner</span>
+                <p className="font-bold text-sm mt-1 text-[#4A154B]">
+                  {courierNameFromTag || "Delhivery"}
+                </p>
+              </div>
+              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Charged to Customer</span>
+                <p className={`font-bold text-sm mt-1 ${exactShippingCharged === 0 ? "text-green-700" : "text-[#4A154B]"}`}>
+                  {exactShippingCharged === 0 ? "Free" : `₹${exactShippingCharged.toLocaleString("en-IN")}`}
+                </p>
+              </div>
+              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Actual Courier Cost</span>
+                {actualCourierCostFromNote !== null ? (
+                  <>
+                    <p className="font-bold text-sm mt-1 text-rose-700">
+                      ₹{actualCourierCostFromNote.toLocaleString("en-IN")}
+                    </p>
+                    <p className="text-[10px] text-[#1A1A1A]/50 mt-0.5">
+                      {exactShippingCharged === 0 ? "Absorbed by store (free offer)" : "Collected from customer"}
+                    </p>
+                  </>
+                ) : (
+                  <p className="font-bold text-sm mt-1 text-[#1A1A1A]/40">
+                    {exactShippingCharged === 0
+                      ? <span className="text-[11px] text-[#1A1A1A]/50 font-normal">Free offer — check courier invoice</span>
+                      : `₹${exactShippingCharged.toLocaleString("en-IN")}`
+                    }
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Margin impact note */}
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200/60 rounded-xl text-[11px] text-amber-900 font-medium">
+              {actualCourierCostFromNote !== null && exactShippingCharged === 0 ? (
+                <>⚠️ Standard shipping is <strong>free to the customer</strong>. Actual courier cost: <strong>₹{actualCourierCostFromNote.toLocaleString("en-IN")}</strong> ({courierNameFromTag || "Delhivery"}) — absorbed as a store expense, reducing net margin accordingly.</>
+              ) : (
+                <>⚠️ Standard shipping is offered <strong>free to customers</strong>. The actual courier cost ({courierNameFromTag || "Delhivery"} Standard) is absorbed as a business expense and will reduce your net margin by the actual courier invoice amount.</>
+              )}
+            </div>
+          </div>
+
           {/* Secure Cost Margins (Founder's Eyes Only) */}
           <div className="ui-card p-5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-2xl relative overflow-hidden">
             <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/10 pb-2.5 flex items-center gap-1.5">
@@ -513,15 +602,47 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                 <p className="text-lg font-display font-bold text-[#4A154B] mt-0.5">₹{totalOrderCost.toLocaleString("en-IN")}</p>
               </div>
               <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Net Profit</span>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Gross Product Profit</span>
                 <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-lg font-display font-bold text-green-700">₹{netProfit.toLocaleString("en-IN")}</span>
-                  <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(overallMargin)}`}>
-                    {Math.round(overallMargin)}%
+                  <span className="text-base font-display font-bold text-green-700">₹{grossProductProfit.toLocaleString("en-IN")}</span>
+                  <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(grossProductMargin)}`}>
+                    {Math.round(grossProductMargin)}%
                   </span>
                 </div>
               </div>
             </div>
+
+            {/* Shipping deduction row */}
+            {exactShippingCharged === 0 && (
+              <div className="mt-3 pt-3 border-t border-[#4A154B]/10">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#1A1A1A]/60 font-semibold">Shipping (Free to Customer — Cost Absorbed):</span>
+                  <span className="font-bold text-rose-600">-₹ (see courier invoice)</span>
+                </div>
+                <div className="flex items-center justify-between text-xs mt-2">
+                  <span className="text-[#1A1A1A]/60 font-semibold">Net Profit After Shipping:</span>
+                  <span className="font-bold text-[#4A154B]">See courier bill for exact net</span>
+                </div>
+              </div>
+            )}
+            {exactShippingCharged > 0 && (
+              <div className="mt-3 pt-3 border-t border-[#4A154B]/10">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#1A1A1A]/60 font-semibold">Shipping Collected from Customer:</span>
+                  <span className="font-bold text-green-700">+₹{exactShippingCharged.toLocaleString("en-IN")}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs mt-1.5">
+                  <span className="font-bold text-[#1A1A1A]">Net Profit (incl. shipping):</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg font-display font-bold text-green-700">₹{netProfit.toLocaleString("en-IN")}</span>
+                    <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(overallMargin)}`}>
+                      {Math.round(overallMargin)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="absolute -right-6 -bottom-6 text-[#4A154B] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
               ₹
             </div>

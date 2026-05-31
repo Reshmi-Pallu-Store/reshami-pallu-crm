@@ -1064,6 +1064,36 @@ export const shopifyCollection = {
       console.error(`Failed to create Smart Collection for tag ${tag}:`, err);
       return false;
     }
+  },
+
+  // Delete a collection by ID
+  async delete(id: string): Promise<boolean> {
+    const mutation = `
+      mutation collectionDelete($input: CollectionDeleteInput!) {
+        collectionDelete(input: $input) {
+          deletedCollectionId
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    try {
+      const res = await shopifyAdminFetch<{ collectionDelete: { userErrors: Array<{ message: string }> } }>({
+        query: mutation,
+        variables: { input: { id } }
+      });
+      if (res.collectionDelete.userErrors.length > 0) {
+        console.error("Collection deletion failed:", res.collectionDelete.userErrors[0].message);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error("Failed to delete collection:", err);
+      return false;
+    }
   }
 };
 

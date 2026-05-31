@@ -5,8 +5,50 @@ import path from "path";
 import { exec } from "child_process";
 import { promisify } from "util";
 import sharp from "sharp";
+import { Redis } from "@upstash/redis";
 
 const execPromise = promisify(exec);
+
+// Shared Redis client (same Upstash instance)
+const redis = new Redis({
+  url: process.env.UPSTASH_REDIS_REST_URL!,
+  token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+});
+
+/** Poll Shopify until the file has a permanent CDN URL (status: READY) */
+async function pollShopifyFileUrl(fileId: string, maxAttempts = 12): Promise<string | null> {
+  const { shopifyAdminFetch } = await import("./shopify");
+  const query = `
+    query getFile($id: ID!) {
+      node(id: $id) {
+        ... on MediaImage {
+          id
+          fileStatus
+          image { url }
+        }
+        ... on GenericFile {
+          id
+          fileStatus
+          url
+        }
+      }
+    }
+  `;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const res = await (shopifyAdminFetch as (args: any) => Promise<any>)({ query, variables: { id: fileId } });
+      const node = res.node;
+      const status = node?.fileStatus;
+      const url = node?.image?.url || node?.url;
+      if ((status === "READY" || status === "UPLOADED") && url && !url.includes("staged-uploads")) {
+        return url;
+      }
+    } catch { /* keep polling */ }
+    // Wait 2s between polls
+    await new Promise(r => setTimeout(r, 2000));
+  }
+  return null;
+}
 
 export async function processQueueAsync() {
   // Trigger asynchronously in non-blocking fashion
@@ -93,7 +135,7 @@ export async function processQueueAsync() {
             }
           }
 
-          // 3. Upload Optimized file to Shopify staged targets CDN
+          // 3. Upload Optimized file to Shopify Files (registered via fileCreate)
           const fileBuffer = await fs.readFile(absoluteOptimizedPath);
           const fileName = `${item.id}${ext}`;
           
@@ -106,15 +148,37 @@ export async function processQueueAsync() {
             else if (ext === ".webm") mimeType = "video/webm";
           }
 
-          console.log(`[Media Worker] Uploading optimized ${fileName} to Shopify staged target...`);
+          console.log(`[Media Worker] Uploading optimized ${fileName} to Shopify...`);
           const result = await shopifySaree.uploadMedia(fileName, mimeType, fileBuffer);
 
-          // 4. Mark status as completed
+          // Poll for permanent CDN URL (staged-upload URLs are temporary and get deleted)
+          let permanentUrl = result.url;
+          if (result.url.includes("staged-uploads") || !result.url.includes("cdn.shopify.com/files")) {
+            console.log(`[Media Worker] Staged URL detected for ${item.id}, polling for permanent CDN URL...`);
+            const polledUrl = await pollShopifyFileUrl(result.id);
+            if (polledUrl) {
+              permanentUrl = polledUrl;
+              console.log(`[Media Worker] Permanent URL obtained: ${permanentUrl}`);
+            } else {
+              console.warn(`[Media Worker] Could not get permanent URL for ${item.id}, will store base64 fallback`);
+            }
+          }
+
+          // Store base64 copy in Redis as permanent fallback (immune to CDN URL expiry)
+          if (item.type === "image") {
+            const base64Data = fileBuffer.toString("base64");
+            const base64Key = `brand-image-data:${item.id}`;
+            await redis.set(base64Key, `data:${mimeType};base64,${base64Data}`, { ex: 365 * 24 * 3600 });
+            console.log(`[Media Worker] Base64 fallback stored in Redis under ${base64Key}`);
+          }
+
+          // 4. Mark status as completed with permanent URL
           const completedItem = {
             ...item,
             status: "completed",
             shopifyId: result.id,
-            shopifyUrl: result.url,
+            shopifyUrl: permanentUrl,
+            base64Key: item.type === "image" ? `brand-image-data:${item.id}` : undefined,
             optimizedPath: absoluteOptimizedPath,
             completedAt: new Date().toISOString()
           };

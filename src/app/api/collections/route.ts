@@ -8,6 +8,9 @@ async function verifySession() {
   return session && session.value === "authenticated";
 }
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // POST: Create a new automated smart collection
 export async function POST(req: NextRequest) {
   try {

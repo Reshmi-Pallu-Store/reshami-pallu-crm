@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   FolderHeart, 
   Plus, 
@@ -15,6 +15,7 @@ interface Collection {
   title: string;
   handle: string;
   productsCount: number;
+  rules?: Array<{ column: string; condition: string }>;
 }
 
 interface CollectionsListProps {
@@ -26,6 +27,17 @@ export default function CollectionsList({ initialCollections }: CollectionsListP
   const [title, setTitle] = useState("");
   const [tag, setTag] = useState("");
   const [loading, setLoading] = useState(false);
+  const [disabledTags, setDisabledTags] = useState<string[]>([]);
+
+
+  useEffect(() => {
+    fetch("/api/collections/disable")
+      .then(r => r.json())
+      .then(d => {
+        if (d.disabledTags) setDisabledTags(d.disabledTags);
+      })
+      .catch(console.error);
+  }, []);
 
   // Template pre-fill helper
   const applyTemplate = (name: string, filterTag: string) => {
@@ -54,6 +66,52 @@ export default function CollectionsList({ initialCollections }: CollectionsListP
       }
     } catch (err) {
       alert("Failed: " + (err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDisable = async (e: React.MouseEvent, tag: string, currentlyDisabled: boolean) => {
+    e.preventDefault();
+    if (!confirm(`Are you sure you want to ${currentlyDisabled ? "enable" : "disable"} this collection in the Storefront navbar?`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/collections/disable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tag, disabled: !currentlyDisabled }),
+      });
+      if (res.ok) {
+        setDisabledTags(prev => !currentlyDisabled ? [...prev, tag.toLowerCase()] : prev.filter(t => t.toLowerCase() !== tag.toLowerCase()));
+      } else {
+        const d = await res.json();
+        alert(d.error || "Action failed");
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async (e: React.MouseEvent, collectionId: string, tag: string) => {
+    e.preventDefault();
+    if (!confirm(`WARNING: This will permanently remove the tag '${tag}' from all products and delete this collection. Continue?`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/collections/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collectionId, tag }),
+      });
+      if (res.ok) {
+        setCollections(prev => prev.filter(c => c.id !== collectionId));
+      } else {
+        const d = await res.json();
+        alert(d.error || "Action failed");
+      }
+    } catch (err) {
+      alert((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -166,36 +224,67 @@ export default function CollectionsList({ initialCollections }: CollectionsListP
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {Array.from(new Map(collections.map(c => [c.id, c])).values()).map((c) => (
-              <a 
-                key={c.id} 
-                href={`https://reshmipallu.com/collections/${c.handle}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between p-4 rounded-xl border border-[#4A154B]/10 bg-white/60 hover:bg-[#4A154B]/5 hover:shadow-md transition-all duration-200 no-underline cursor-pointer group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-[#4A154B]/5 border border-[#4A154B]/10 flex items-center justify-center text-[#4A154B] group-hover:bg-[#4A154B]/10 transition-colors">
-                    <ShoppingBag size={18} />
-                  </div>
-                  <div>
-                    <span className="font-semibold text-sm text-[#4A154B] block leading-tight">
-                      {c.title}
-                    </span>
-                    <span className="text-[10px] text-[#1A1A1A]/50 font-mono mt-1 block">
-                      slug: {c.handle}
-                    </span>
-                  </div>
-                </div>
+            {Array.from(new Map(collections.map(c => [c.id, c])).values()).map((c) => {
+              const tagRule = c.rules?.find(r => r.column === "TAG");
+              const collectionTag = tagRule?.condition || c.title; // fallback
+              const isProtected = c.title.toLowerCase() === "all sarees" || c.title.toLowerCase().includes("founder") || collectionTag.toLowerCase().includes("founder");
+              const isCurrentlyDisabled = disabledTags.some(t => t.toLowerCase() === collectionTag.toLowerCase());
 
-                <div className="text-right flex items-center gap-2">
-                  <span className="bg-[#E6F0EA] text-[#137333] border border-[#E6F0EA] rounded-full px-2.5 py-1 text-[10px] font-bold">
-                    {c.productsCount} Sarees
-                  </span>
-                  <span className="text-[10px] text-[#4A154B]/50 font-bold group-hover:translate-x-0.5 transition-transform">→</span>
+              return (
+                <div key={c.id} className="relative group">
+                  <a 
+                    href={`https://reshmipallu.com/collections/${c.handle}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex items-center justify-between p-4 rounded-xl border border-[#4A154B]/10 transition-all duration-200 no-underline cursor-pointer h-full ${isCurrentlyDisabled ? 'bg-gray-50 opacity-70' : 'bg-white/60 hover:bg-[#4A154B]/5 hover:shadow-md'}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg border flex items-center justify-center transition-colors ${isCurrentlyDisabled ? 'bg-gray-200 border-gray-300 text-gray-500' : 'bg-[#4A154B]/5 border-[#4A154B]/10 text-[#4A154B] group-hover:bg-[#4A154B]/10'}`}>
+                        <ShoppingBag size={18} />
+                      </div>
+                      <div>
+                        <span className={`font-semibold text-sm block leading-tight ${isCurrentlyDisabled ? 'text-gray-600' : 'text-[#4A154B]'}`}>
+                          {c.title}
+                        </span>
+                        <span className="text-[10px] text-[#1A1A1A]/50 font-mono mt-1 block">
+                          slug: {c.handle}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="text-right flex items-center gap-2">
+                      <span className={`border rounded-full px-2.5 py-1 text-[10px] font-bold ${isCurrentlyDisabled ? 'bg-gray-200 text-gray-600 border-gray-200' : 'bg-[#E6F0EA] text-[#137333] border-[#E6F0EA]'}`}>
+                        {c.productsCount} Sarees
+                      </span>
+                    </div>
+                  </a>
+
+                  {/* Actions overlay - only show on hover if not protected */}
+                  {!isProtected && (
+                    <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        type="button"
+                        disabled={loading}
+                        onClick={(e) => handleDisable(e, collectionTag, isCurrentlyDisabled)}
+                        className={`px-2 py-1 text-[10px] font-bold rounded-md cursor-pointer transition ${isCurrentlyDisabled ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}
+                        title={isCurrentlyDisabled ? "Enable in Nav" : "Disable in Nav"}
+                      >
+                        {isCurrentlyDisabled ? "Enable" : "Disable"}
+                      </button>
+                      <button 
+                        type="button"
+                        disabled={loading}
+                        onClick={(e) => handleDelete(e, c.id, collectionTag)}
+                        className="px-2 py-1 text-[10px] font-bold rounded-md bg-red-100 text-red-700 hover:bg-red-200 cursor-pointer transition"
+                        title="Delete Collection & Remove Tag"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </a>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

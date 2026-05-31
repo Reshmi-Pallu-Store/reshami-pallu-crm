@@ -4,10 +4,12 @@ import { useEffect, useState, useRef } from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import { Sparkles, UploadCloud, Save, Image as ImageIcon, CheckCircle, RefreshCw, Type, Eye } from "lucide-react";
+import { ImageCropperModal } from "@/components/layout/ImageCropperModal";
 
 interface MediaStatus {
   status: "queued" | "processing" | "success" | "completed" | "failed";
   shopifyUrl?: string | null;
+  base64Key?: string | null;
   error?: string | null;
 }
 
@@ -16,6 +18,7 @@ export default function StoreCustomizerPage() {
   const [heroTitle, setHeroTitle] = useState("");
   const [heroSubtitle, setHeroSubtitle] = useState("");
   const [loginImage, setLoginImage] = useState("");
+  const [heroEnabled, setHeroEnabled] = useState(true);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -24,6 +27,12 @@ export default function StoreCustomizerPage() {
   const [uploadTarget, setUploadTarget] = useState<"hero" | "login" | null>(null);
   const [mediaId, setMediaId] = useState<string | null>(null);
   const [mediaStatus, setMediaStatus] = useState<MediaStatus | null>(null);
+
+  // Cropper states
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [cropImageSrc, setCropImageSrc] = useState<string | null>(null);
+  const [cropTarget, setCropTarget] = useState<"hero" | "login" | null>(null);
+  const [cropAspectRatio, setCropAspectRatio] = useState(16 / 9);
 
   const heroInputRef = useRef<HTMLInputElement>(null);
   const loginInputRef = useRef<HTMLInputElement>(null);
@@ -39,6 +48,7 @@ export default function StoreCustomizerPage() {
           setHeroTitle(data.heroTitle || "");
           setHeroSubtitle(data.heroSubtitle || "");
           setLoginImage(data.loginImage || "");
+          setHeroEnabled(data.heroEnabled !== false);
         }
       } catch (err) {
         console.error("Failed to load customizer settings:", err);
@@ -65,11 +75,32 @@ export default function StoreCustomizerPage() {
           });
 
           if ((data.status === "success" || data.status === "completed") && data.shopifyUrl) {
-            if (uploadTarget === "hero") {
-              setHeroImage(data.shopifyUrl);
-            } else if (uploadTarget === "login") {
-              setLoginImage(data.shopifyUrl);
+            const newUrl = data.shopifyUrl;
+            const slot = uploadTarget; // "hero" or "login"
+
+            if (slot === "hero") {
+              setHeroImage(newUrl);
+            } else if (slot === "login") {
+              setLoginImage(newUrl);
             }
+
+            // Persist the base64 to a stable Redis slot key via the customizer API
+            // so the storefront proxy always has a copy immune to CDN URL expiry
+            if (data.base64Key) {
+              try {
+                await fetch("/api/customizer", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    [`${slot}Image`]: newUrl,
+                    [`${slot}ImageBase64Key`]: data.base64Key,
+                  }),
+                });
+              } catch (e) {
+                console.error("Failed to persist base64 slot:", e);
+              }
+            }
+
             setMediaId(null); // Stop polling
             setUploadTarget(null);
             setMediaStatus(null);
@@ -87,16 +118,30 @@ export default function StoreCustomizerPage() {
     return () => clearInterval(interval);
   }, [mediaId, uploadTarget]);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, target: "hero" | "login") => {
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>, target: "hero" | "login") => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploadTarget(target);
+    const url = URL.createObjectURL(file);
+    setCropImageSrc(url);
+    setCropTarget(target);
+    setCropAspectRatio(target === "hero" ? 16 / 9 : 3 / 4.2);
+    setCropperOpen(true);
+    
+    // clear input value so same file can be selected again
+    e.target.value = "";
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob) => {
+    setCropperOpen(false);
+    if (!cropTarget) return;
+
+    setUploadTarget(cropTarget);
     setMediaId(null);
     setMediaStatus({ status: "queued" });
 
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", croppedBlob, "cropped.jpg");
 
     try {
       const res = await fetch("/api/upload", {
@@ -112,6 +157,13 @@ export default function StoreCustomizerPage() {
       setUploadTarget(null);
       setMediaStatus(null);
     }
+    
+    // cleanup
+    if (cropImageSrc) {
+      URL.revokeObjectURL(cropImageSrc);
+    }
+    setCropImageSrc(null);
+    setCropTarget(null);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -127,6 +179,7 @@ export default function StoreCustomizerPage() {
           heroTitle,
           heroSubtitle,
           loginImage,
+          heroEnabled,
         }),
       });
 
@@ -271,16 +324,26 @@ export default function StoreCustomizerPage() {
                   
                   {/* Hero Banner Box */}
                   <div className="ui-card p-6 space-y-4">
-                    <div>
-                      <h4 className="font-display font-bold text-[#4A154B] text-base">
-                        Storefront Hero Banner
-                      </h4>
-                      <p className="text-xs text-[#1A1A1A]/50">
-                        Primary widescreen landscape image.
-                      </p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-display font-bold text-[#4A154B] text-base">
+                          Storefront Hero Banner
+                        </h4>
+                        <p className="text-xs text-[#1A1A1A]/50">
+                          Primary widescreen landscape image.
+                        </p>
+                      </div>
+                      <label className="flex items-center cursor-pointer">
+                        <div className="relative">
+                          <input type="checkbox" className="sr-only" checked={heroEnabled} onChange={(e) => setHeroEnabled(e.target.checked)} />
+                          <div className={`block w-10 h-6 rounded-full transition-colors ${heroEnabled ? 'bg-[#4A154B]' : 'bg-gray-300'}`}></div>
+                          <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${heroEnabled ? 'transform translate-x-4' : ''}`}></div>
+                        </div>
+                        <span className="ml-3 text-xs font-medium text-gray-900">{heroEnabled ? 'Enabled' : 'Disabled'}</span>
+                      </label>
                     </div>
 
-                    <div className="relative aspect-[16/9] w-full bg-[#FAF8F5] rounded-xl overflow-hidden border border-[#4A154B]/10 flex flex-col items-center justify-center group shadow-inner">
+                    <div className={`relative aspect-[16/9] w-full bg-[#FAF8F5] rounded-xl overflow-hidden border border-[#4A154B]/10 flex flex-col items-center justify-center group shadow-inner ${!heroEnabled ? 'opacity-50 grayscale' : ''}`}>
                       {heroImage ? (
                         <>
                           <img
@@ -419,6 +482,19 @@ export default function StoreCustomizerPage() {
 
         </main>
       </div>
+
+      {cropperOpen && cropImageSrc && (
+        <ImageCropperModal
+          imageSrc={cropImageSrc}
+          aspectRatio={cropAspectRatio}
+          onClose={() => {
+            setCropperOpen(false);
+            if (cropImageSrc) URL.revokeObjectURL(cropImageSrc);
+            setCropImageSrc(null);
+          }}
+          onCropComplete={handleCropComplete}
+        />
+      )}
     </div>
   );
 }
