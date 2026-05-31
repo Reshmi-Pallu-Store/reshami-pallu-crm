@@ -294,18 +294,9 @@ export default async function DashboardPage() {
                 </p>
               </div>
 
-              {/* Graphical Circular Progress Meter */}
-              <div className="flex flex-col items-center justify-center py-4 space-y-3">
-                <div className="relative w-36 h-36 rounded-full border-8 border-[#4A154B]/5 flex items-center justify-center shadow-inner" style={{
-                  background: `conic-gradient(#4A154B ${netMargin}%, #FAF8F5 0)`
-                }}>
-                  {/* Center Circle Mask */}
-                  <div className="absolute inset-2 bg-white rounded-full flex flex-col items-center justify-center shadow-lg border border-[#4A154B]/5">
-                    <span className="text-xs font-semibold text-[#1A1A1A]/50 uppercase tracking-widest leading-none">Margin</span>
-                    <span className="text-3xl font-display font-bold text-[#4A154B] mt-1">{netMargin.toFixed(0)}%</span>
-                  </div>
-                </div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#4A154B]">Est. Net Profitability</span>
+              <div className="flex flex-col items-center justify-center py-4 space-y-1">
+                <span className="text-4xl font-display font-bold text-[#4A154B]">{netMargin.toFixed(0)}%</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#1A1A1A]/50">Est. Net Profitability</span>
               </div>
 
               <div className="space-y-3 border-t border-[#4A154B]/5 pt-4 text-xs text-[#1A1A1A]/70">
