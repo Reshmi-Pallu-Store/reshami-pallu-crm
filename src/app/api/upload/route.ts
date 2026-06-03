@@ -5,6 +5,8 @@ import path from "path";
 import os from "os";
 import { db } from "@/lib/db";
 import { processQueueAsync } from "@/lib/media-worker";
+// @ts-ignore
+import heicConvert from "heic-convert";
 
 export const revalidate = 0; // Dynamic route
 
@@ -31,10 +33,28 @@ export async function POST(req: NextRequest) {
     const uploadDir = path.join(os.tmpdir(), "reshami-pallu-uploads");
     await fs.mkdir(uploadDir, { recursive: true });
 
-    const ext = path.extname(file.name) || (file.type.startsWith("video/") ? ".mp4" : ".jpg");
-    const absolutePath = path.join(uploadDir, `${mediaId}${ext}`);
+    let ext = path.extname(file.name).toLowerCase() || (file.type.startsWith("video/") ? ".mp4" : ".jpg");
+    let mimeType = file.type;
+    let buffer = Buffer.from(await file.arrayBuffer());
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    // Automatic HEIC to JPEG conversion for iPhone images
+    if (ext === ".heic" || ext === ".heif" || mimeType === "image/heic" || mimeType === "image/heif") {
+      try {
+        console.log(`[Upload API] Converting HEIC image ${file.name} to JPEG for iPhone compatibility...`);
+        const converted = await heicConvert({
+          buffer: buffer,
+          format: "JPEG",
+          quality: 0.9
+        });
+        buffer = Buffer.from(converted);
+        ext = ".jpg";
+        mimeType = "image/jpeg";
+      } catch (convErr: any) {
+        console.error("[Upload API] HEIC conversion failed, keeping original:", convErr);
+      }
+    }
+
+    const absolutePath = path.join(uploadDir, `${mediaId}${ext}`);
     await fs.writeFile(absolutePath, buffer);
 
     // Register queue metadata inside Upstash Redis hash
@@ -42,9 +62,9 @@ export async function POST(req: NextRequest) {
       id: mediaId,
       path: absolutePath, // Save the absolute path directly
       status: "queued",
-      type: file.type.startsWith("video/") ? "video" : "image",
-      originalName: file.name,
-      mimeType: file.type,
+      type: mimeType.startsWith("video/") ? "video" : "image",
+      originalName: file.name.replace(/\.(heic|heif)$/i, ".jpg"),
+      mimeType: mimeType,
       createdAt: new Date().toISOString()
     };
     await db.hset("media:queue", { [mediaId]: JSON.stringify(queueItem) });

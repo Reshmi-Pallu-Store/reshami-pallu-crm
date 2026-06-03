@@ -11,7 +11,12 @@ import {
   Sparkles, 
   ArrowRight,
   PlusCircle,
-  UploadCloud
+  UploadCloud,
+  FileText,
+  Percent,
+  Bookmark,
+  Calendar,
+  Layers
 } from "lucide-react";
 
 export const revalidate = 0; // Disable cache so the dashboard is always live
@@ -122,36 +127,145 @@ export default async function DashboardPage() {
       {/* Main Panel Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top Header */}
-        <Header title="Workspace Overview" />
+        <Header title="Saree Curation Center" />
 
         {/* Dashboard Frame */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1360px] mx-auto w-full space-y-6 sm:space-y-8">
           
-          {/* Quick Actions Bar */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white/40 border border-[#4A154B]/10 rounded-2xl p-4 sm:p-6 backdrop-blur-md">
-            <div>
-              <h3 className="font-display font-bold text-base sm:text-lg text-[#4A154B] flex items-center gap-2">
-                <Sparkles size={18} className="text-[#D4AF37]" />
-                Welcome Back, Mrinalini!
-              </h3>
-              <p className="text-xs text-[#1A1A1A]/60 mt-0.5">
-                Ready to manage your beautiful handwoven saree catalog today?
-              </p>
-            </div>
+          {/* Re-designed Premium Welcome & Quick Actions Bar */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#4A154B] via-[#6B3B6C] to-[#4A154B] border border-[#D4AF37]/20 p-6 sm:p-8 shadow-xl text-white">
+            {/* Background luxury overlay */}
+            <div className="absolute right-0 top-0 w-96 h-96 bg-radial-gradient from-[#D4AF37]/10 to-transparent opacity-60 pointer-events-none select-none" />
             
-            <div className="flex items-center gap-3">
-              <Link href="/products/add" className="btn-primary no-underline text-xs uppercase tracking-wider flex items-center gap-1.5 py-2.5 px-4 shadow-md">
-                <PlusCircle size={14} />
-                Create Saree
+            <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+              <div className="space-y-2">
+                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-[#D4AF37]">
+                  <Sparkles size={12} className="animate-pulse" />
+                  <span>Reshmi Pallu Master Room</span>
+                </div>
+                <h3 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wide">
+                  Namaste, Mrinalini!
+                </h3>
+                <p className="text-sm text-white/80 max-w-xl">
+                  Welcome back to your curation suite. Let&apos;s manage your beautiful, handwoven luxury sarees and craft stunning digital twins today.
+                </p>
+              </div>
+            </div>
+
+            {/* Premium quick shortcut grids designed for non-technical users */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/10">
+              <Link href="/products/add" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
+                <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37] mb-3 group-hover:scale-110 transition-transform">
+                  <PlusCircle size={20} />
+                </div>
+                <span className="text-xs font-bold tracking-wide">Add a Saree</span>
+                <span className="text-[10px] text-white/60 mt-1">Design a new saree style & push to shop</span>
               </Link>
-              <Link href="/bulk-upload" className="btn-secondary no-underline text-xs uppercase tracking-wider flex items-center gap-1.5 py-2.5 px-4">
-                <UploadCloud size={14} />
-                Bulk CSV Upload
+
+              <Link href="/products/add#ai-studio" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
+                <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-300 mb-3 group-hover:scale-110 transition-transform">
+                  <Sparkles size={20} />
+                </div>
+                <span className="text-xs font-bold tracking-wide">AI Digital Twin Shoot</span>
+                <span className="text-[10px] text-white/60 mt-1">Generate draped professional model shoots</span>
+              </Link>
+
+              <Link href="/bulk-upload" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-300 mb-3 group-hover:scale-110 transition-transform">
+                  <UploadCloud size={20} />
+                </div>
+                <span className="text-xs font-bold tracking-wide">Bulk CSV Import</span>
+                <span className="text-[10px] text-white/60 mt-1">Import multiple sarees instantly in one go</span>
+              </Link>
+
+              <Link href="/discounts" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
+                <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-300 mb-3 group-hover:scale-110 transition-transform">
+                  <Percent size={20} />
+                </div>
+                <span className="text-xs font-bold tracking-wide">Deals & Coupons</span>
+                <span className="text-[10px] text-white/60 mt-1">Launch discounts & clear aging inventory</span>
               </Link>
             </div>
           </div>
 
-          {/* Core Dashboard Metric Cards */}
+          {/* New Visual Showroom Carousel */}
+          <div className="space-y-3">
+            <div className="flex justify-between items-center px-1">
+              <div>
+                <h4 className="font-display font-bold text-lg text-[#4A154B] flex items-center gap-2">
+                  <Layers size={18} className="text-[#D4AF37]" />
+                  Active Showroom Gallery
+                </h4>
+                <p className="text-xs text-[#1A1A1A]/60">Click on any saree card to view detail grid or edit stock levels.</p>
+              </div>
+              <Link href="/products" className="no-underline text-xs text-[#4A154B] hover:text-[#D4AF37] font-bold flex items-center gap-1 transition-colors">
+                Open Full Catalog Grid
+                <ArrowRight size={12} />
+              </Link>
+            </div>
+
+            <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin scroll-smooth">
+              {products.slice(0, 10).map((p) => (
+                <div 
+                  key={p.id} 
+                  className="snap-start shrink-0 w-48 bg-white border border-[#4A154B]/10 rounded-2xl p-3 shadow-sm hover:shadow-md hover:border-[#D4AF37]/50 transition-all duration-300 group flex flex-col justify-between"
+                >
+                  <div className="space-y-3">
+                    {/* Saree Image Thumbnail */}
+                    <div className="w-full h-44 rounded-xl bg-gradient-to-tr from-[#FAF8F5] to-white overflow-hidden relative border border-[#4A154B]/5">
+                      {p.imageUrl ? (
+                        <img 
+                          src={p.imageUrl} 
+                          alt={p.title} 
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-[#4A154B]/30 gap-1.5 p-4">
+                          <ShoppingBag size={24} />
+                          <span className="text-[9px] uppercase tracking-wider font-semibold">No Image</span>
+                        </div>
+                      )}
+                      
+                      {/* Floating Stock Badge */}
+                      <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                        p.stock === 0
+                          ? 'bg-red-50 text-red-600 border-red-100'
+                          : p.stock < 3
+                          ? 'bg-amber-50 text-amber-700 border-amber-100'
+                          : 'bg-green-50 text-green-700 border-green-100'
+                      }`}>
+                        {p.stock === 0 ? "Out of Stock" : `${p.stock} units`}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <h5 className="font-semibold text-xs text-[#4A154B] line-clamp-1 group-hover:text-[#D4AF37] transition-colors">
+                        {p.title}
+                      </h5>
+                      <span className="text-[10px] font-mono text-[#1A1A1A]/40 block">SKU: {p.sku || "N/A"}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#4A154B]/5">
+                    <span className="text-xs font-bold text-[#4A154B]">₹{(p.price || 0).toLocaleString('en-IN')}</span>
+                    <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-[10px] uppercase font-bold tracking-wider text-[#D4AF37] hover:text-[#4A154B] transition-colors">
+                      Edit
+                    </Link>
+                  </div>
+                </div>
+              ))}
+              
+              {products.length === 0 && (
+                <div className="w-full h-32 rounded-2xl border border-dashed border-[#4A154B]/10 flex flex-col items-center justify-center bg-white/40">
+                  <p className="text-xs text-[#1A1A1A]/40 font-medium">
+                    No sarees in catalog. Let&apos;s add some designs to get started!
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Redesigned Metric Cards with conversational tooltip guides */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             
             {/* Unique Saree Items Card */}
@@ -159,8 +273,18 @@ export default async function DashboardPage() {
               <div className="w-12 h-12 rounded-xl bg-[#4A154B]/5 border border-[#4A154B]/10 flex items-center justify-center text-[#4A154B]">
                 <ShoppingBag size={20} />
               </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Unique Saree Styles</span>
+              <div className="relative z-10">
+                <div className="flex items-center">
+                  <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Unique Saree Designs</span>
+                  {/* conversational CSS tooltip */}
+                  <div className="group relative cursor-pointer ml-1.5 inline-block text-[#1A1A1A]/40 hover:text-[#4A154B]">
+                    <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-current text-[9px] font-bold">i</span>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2.5 bg-[#4A154B] text-white text-[10px] font-medium rounded-lg shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-50 leading-relaxed text-center">
+                      The total number of unique handwoven designs you have created and cataloged.
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#4A154B]" />
+                    </div>
+                  </div>
+                </div>
                 <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">{totalSareesCount}</h4>
               </div>
               <div className="absolute -right-6 -bottom-6 text-[#4A154B] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
@@ -173,9 +297,18 @@ export default async function DashboardPage() {
               <div className="w-12 h-12 rounded-xl bg-[#D4AF37]/5 border border-[#D4AF37]/10 flex items-center justify-center text-[#D4AF37]">
                 <TrendingUp size={20} />
               </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Total Active Stock</span>
-                <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">{totalStock} sarees</h4>
+              <div className="relative z-10">
+                <div className="flex items-center">
+                  <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Showroom Stock Count</span>
+                  <div className="group relative cursor-pointer ml-1.5 inline-block text-[#1A1A1A]/40 hover:text-[#4A154B]">
+                    <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-current text-[9px] font-bold">i</span>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2.5 bg-[#4A154B] text-white text-[10px] font-medium rounded-lg shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-50 leading-relaxed text-center">
+                      The physical count of saree pieces currently in stock and ready to ship.
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#4A154B]" />
+                    </div>
+                  </div>
+                </div>
+                <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">{totalStock} pieces</h4>
               </div>
               <div className="absolute -right-6 -bottom-6 text-[#D4AF37] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
                 PCS
@@ -187,8 +320,17 @@ export default async function DashboardPage() {
               <div className="w-12 h-12 rounded-xl bg-green-50 border border-green-100 flex items-center justify-center text-green-700">
                 <DollarSign size={20} />
               </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Total Retail Value</span>
+              <div className="relative z-10">
+                <div className="flex items-center">
+                  <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Estimated Catalog Value</span>
+                  <div className="group relative cursor-pointer ml-1.5 inline-block text-[#1A1A1A]/40 hover:text-[#4A154B]">
+                    <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-current text-[9px] font-bold">i</span>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2.5 bg-[#4A154B] text-white text-[10px] font-medium rounded-lg shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-50 leading-relaxed text-center">
+                      The total potential revenue you will make if you sell all active catalog stock.
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#4A154B]" />
+                    </div>
+                  </div>
+                </div>
                 <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">
                   ₹{totalRetailValue.toLocaleString('en-IN')}
                 </h4>
@@ -203,8 +345,17 @@ export default async function DashboardPage() {
               <div className="w-12 h-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-700">
                 <TrendingUp size={20} />
               </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Est. Profit Margin</span>
+              <div className="relative z-10">
+                <div className="flex items-center">
+                  <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">Average Markup Health</span>
+                  <div className="group relative cursor-pointer ml-1.5 inline-block text-[#1A1A1A]/40 hover:text-[#4A154B]">
+                    <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full border border-current text-[9px] font-bold">i</span>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 p-2.5 bg-[#4A154B] text-white text-[10px] font-medium rounded-lg shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-50 leading-relaxed text-center">
+                      Your average profit percentage margins. Shows the health gap between production cost and retail price.
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-[#4A154B]" />
+                    </div>
+                  </div>
+                </div>
                 <h4 className="text-2xl font-display font-bold text-[#4A154B] mt-0.5">
                   {netMargin.toFixed(1)}%
                 </h4>
@@ -223,7 +374,7 @@ export default async function DashboardPage() {
               <div className="flex justify-between items-center">
                 <h4 className="font-display font-bold text-base text-[#4A154B] flex items-center gap-2">
                   <AlertTriangle size={16} className="text-[#D4AF37]" />
-                  Stock Alert Level (Low Stock)
+                  Stock Alerts (Items running low)
                 </h4>
                 <Link href="/products" className="no-underline text-xs text-[#4A154B] hover:underline font-semibold flex items-center gap-1">
                   View Full Grid
@@ -283,33 +434,53 @@ export default async function DashboardPage() {
               )}
             </div>
 
-            {/* Right Side: Margin Analysis Visual Panel */}
+            {/* Right Side: Margin Analysis Visual Panel - Redesigned to be friendly */}
             <div className="ui-card p-6 flex flex-col justify-between space-y-6">
               <div>
                 <h4 className="font-display font-bold text-base text-[#4A154B]">
-                  Financial Health Analysis
+                  Financial Health Overview
                 </h4>
                 <p className="text-xs text-[#1A1A1A]/60 mt-1">
-                  Private overview comparing your retail income value to saree base cost investments.
+                  Comparing your retail valuation to what you spent to produce/acquire these sarees.
                 </p>
               </div>
 
               <div className="flex flex-col items-center justify-center py-4 space-y-1">
                 <span className="text-4xl font-display font-bold text-[#4A154B]">{netMargin.toFixed(0)}%</span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-[#1A1A1A]/50">Est. Net Profitability</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[#1A1A1A]/50">Average Profitability Markup</span>
               </div>
 
               <div className="space-y-3 border-t border-[#4A154B]/5 pt-4 text-xs text-[#1A1A1A]/70">
-                <div className="flex justify-between">
-                  <span>Gross Saree Costs (Capital Tied Up):</span>
+                <div className="flex justify-between items-center">
+                  <span className="flex items-center">
+                    Inventory Investment
+                    <div className="group relative cursor-pointer ml-1 text-[#1A1A1A]/40 hover:text-[#4A154B]">
+                      <span className="inline-flex items-center justify-center w-3 h-3 rounded-full border border-current text-[8px] font-bold">?</span>
+                      <div className="absolute bottom-full right-0 mb-2 w-44 p-2 bg-[#4A154B] text-white text-[9px] font-medium rounded-lg shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-50 leading-relaxed text-center">
+                        Total money spent to create or acquire these physical sarees.
+                        <div className="absolute top-full right-4 border-4 border-transparent border-t-[#4A154B]" />
+                      </div>
+                    </div>
+                  </span>
                   <span className="font-semibold text-red-600">₹{capitalTiedUp.toLocaleString('en-IN')}</span>
                 </div>
+                
                 <div className="flex justify-between">
                   <span>Projected Retail Gross:</span>
                   <span className="font-semibold text-[#1A1A1A]">₹{totalRetailValue.toLocaleString('en-IN')}</span>
                 </div>
-                <div className="flex justify-between border-t border-[#4A154B]/5 pt-2 font-bold text-sm text-[#4A154B]">
-                  <span>Est. Net Profit (ROI: {roiExpectation.toFixed(0)}%):</span>
+                
+                <div className="flex justify-between border-t border-[#4A154B]/5 pt-2 font-bold text-sm text-[#4A154B] items-center">
+                  <span className="flex items-center">
+                    Estimated Profit
+                    <div className="group relative cursor-pointer ml-1 text-[#1A1A1A]/40 hover:text-[#4A154B]">
+                      <span className="inline-flex items-center justify-center w-3 h-3 rounded-full border border-current text-[8px] font-bold">?</span>
+                      <div className="absolute bottom-full right-0 mb-2 w-44 p-2 bg-[#4A154B] text-white text-[9px] font-medium rounded-lg shadow-xl opacity-0 scale-95 pointer-events-none group-hover:opacity-100 group-hover:scale-100 transition-all duration-200 z-50 leading-relaxed text-center">
+                        Pure net earnings when all sarees sell (ROI: {roiExpectation.toFixed(0)}%).
+                        <div className="absolute top-full right-4 border-4 border-transparent border-t-[#4A154B]" />
+                      </div>
+                    </div>
+                  </span>
                   <span className="text-green-600">₹{projectedNetProfit.toLocaleString('en-IN')}</span>
                 </div>
               </div>
@@ -322,8 +493,8 @@ export default async function DashboardPage() {
             
             {/* Top Categories Chart */}
             <div className="ui-card p-6 flex flex-col space-y-4">
-              <h4 className="font-display font-bold text-base text-[#4A154B]">Category & Tag Distribution</h4>
-              <p className="text-xs text-[#1A1A1A]/60 -mt-2 mb-2">The highest concentrated styles across your active inventory.</p>
+              <h4 className="font-display font-bold text-base text-[#4A154B]">Saree Fabrics & Tag Distribution</h4>
+              <p className="text-xs text-[#1A1A1A]/60 -mt-2 mb-2">The highest concentrated styles across your active catalog.</p>
               
               <div className="space-y-4 mt-2">
                 {topCategories.map(([tag, count], index) => {
@@ -333,12 +504,12 @@ export default async function DashboardPage() {
                     <div key={tag} className="space-y-1">
                       <div className="flex justify-between text-xs font-semibold text-[#4A154B]">
                         <span>{tag}</span>
-                        <span>{count} pcs</span>
+                        <span>{count} pieces</span>
                       </div>
                       <div className="h-2.5 w-full bg-[#FAF8F5] rounded-full overflow-hidden">
                         <div 
-                          className="h-full bg-[#D4AF37] rounded-full transition-all duration-1000 ease-out" 
-                          style={{ width: `${pct}%`, opacity: 1 - (index * 0.15) }}
+                          className="h-full bg-gradient-to-r from-[#D4AF37] to-[#4A154B] rounded-full transition-all duration-1000 ease-out" 
+                          style={{ width: `${pct}%`, opacity: 1 - (index * 0.12) }}
                         />
                       </div>
                     </div>
@@ -352,8 +523,8 @@ export default async function DashboardPage() {
 
             {/* Age Cohorts Visualization */}
             <div className="ui-card p-6 flex flex-col space-y-4">
-              <h4 className="font-display font-bold text-base text-[#4A154B]">Inventory Age Cohorts</h4>
-              <p className="text-xs text-[#1A1A1A]/60 -mt-2 mb-2">Tracking inventory turnover and aging stock.</p>
+              <h4 className="font-display font-bold text-base text-[#4A154B]">Inventory Flow & Aging Stock</h4>
+              <p className="text-xs text-[#1A1A1A]/60 -mt-2 mb-2">Tracking catalog turnover speed to avoid stale designs.</p>
               
               {/* Stacked Bar */}
               <div className="h-6 w-full flex rounded-full overflow-hidden mb-2 shadow-inner border border-soft-black/5">
@@ -364,19 +535,19 @@ export default async function DashboardPage() {
 
               {/* Legend */}
               <div className="grid grid-cols-3 gap-2 pt-2">
-                <div className="text-center bg-green-50 rounded-lg p-2 border border-green-100">
-                  <div className="text-[10px] uppercase font-bold text-green-700 tracking-wider">Fresh</div>
-                  <div className="text-[10px] text-green-600/80 mb-1">&lt; 7 Days</div>
+                <div className="text-center bg-green-50 rounded-xl p-2.5 border border-green-100">
+                  <div className="text-[10px] uppercase font-bold text-green-700 tracking-wider">Fresh Arrivals</div>
+                  <div className="text-[9px] text-green-600/80 mb-1">&lt; 7 Days old</div>
                   <div className="text-lg font-display font-bold text-green-700">{freshStock} <span className="text-[10px] font-sans font-normal opacity-70">pcs</span></div>
                 </div>
-                <div className="text-center bg-yellow-50 rounded-lg p-2 border border-yellow-100">
-                  <div className="text-[10px] uppercase font-bold text-yellow-700 tracking-wider">Maturing</div>
-                  <div className="text-[10px] text-yellow-600/80 mb-1">7 - 30 Days</div>
+                <div className="text-center bg-yellow-50 rounded-xl p-2.5 border border-yellow-100">
+                  <div className="text-[10px] uppercase font-bold text-yellow-700 tracking-wider">maturing stock</div>
+                  <div className="text-[9px] text-yellow-600/80 mb-1">7 - 30 Days old</div>
                   <div className="text-lg font-display font-bold text-yellow-700">{maturingStock} <span className="text-[10px] font-sans font-normal opacity-70">pcs</span></div>
                 </div>
-                <div className="text-center bg-red-50 rounded-lg p-2 border border-red-100">
-                  <div className="text-[10px] uppercase font-bold text-red-700 tracking-wider">Dead</div>
-                  <div className="text-[10px] text-red-600/80 mb-1">&gt; 30 Days</div>
+                <div className="text-center bg-red-50 rounded-xl p-2.5 border border-red-100">
+                  <div className="text-[10px] uppercase font-bold text-red-700 tracking-wider">slow-moving</div>
+                  <div className="text-[9px] text-red-600/80 mb-1">&gt; 30 Days old</div>
                   <div className="text-lg font-display font-bold text-red-700">{deadStock} <span className="text-[10px] font-sans font-normal opacity-70">pcs</span></div>
                 </div>
               </div>
@@ -389,10 +560,10 @@ export default async function DashboardPage() {
             <div className="flex justify-between items-center">
               <h4 className="font-display font-bold text-base text-red-700 flex items-center gap-2">
                 <AlertTriangle size={16} className="text-red-600 animate-pulse" />
-                Dead Stock Inventory (Held &gt; 1 Month)
+                Slow-moving Sarees (Held for more than 1 month)
               </h4>
               <span className="text-xs bg-red-50 text-red-700 border border-red-100 rounded-full px-2.5 py-0.5 font-bold">
-                {deadStockProducts.length} Items Identified
+                {deadStockProducts.length} Items Need Clearance
               </span>
             </div>
 

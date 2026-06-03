@@ -26,19 +26,39 @@ interface NavItem {
   icon: React.ComponentType<{ size: number }>;
 }
 
-const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
-  { label: "Inventory Grid", href: "/products", icon: ShoppingBag },
-  { label: "Add Saree", href: "/products/add", icon: PlusCircle },
-  { label: "Bulk Upload", href: "/bulk-upload", icon: UploadCloud },
-  { label: "Discounts", href: "/discounts", icon: Sparkles },
-  { label: "Collections", href: "/collections", icon: FolderHeart },
-  { label: "Customer Orders", href: "/orders", icon: Package },
-  { label: "Founder's Story", href: "/founder-story", icon: UserRound },
-  { label: "Financials", href: "/financials", icon: ScrollText },
-  { label: "Shopify Policies", href: "/policies", icon: ShieldCheck },
-  { label: "Store Customizer", href: "/customizer", icon: Palette },
-  { label: "Operations Guide", href: "/manual", icon: BookOpen },
+interface NavGroup {
+  groupLabel: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    groupLabel: "Saree Curation & Catalog",
+    items: [
+      { label: "Dashboard Overview", href: "/", icon: LayoutDashboard },
+      { label: "Saree Inventory Grid", href: "/products", icon: ShoppingBag },
+      { label: "Create a Saree", href: "/products/add", icon: PlusCircle },
+      { label: "Collections Manager", href: "/collections", icon: FolderHeart },
+      { label: "Bulk CSV Import", href: "/bulk-upload", icon: UploadCloud },
+    ]
+  },
+  {
+    groupLabel: "Brand & Customer Curation",
+    items: [
+      { label: "Customer Orders", href: "/orders", icon: Package },
+      { label: "Active Discounts", href: "/discounts", icon: Sparkles },
+      { label: "Founder's Story", href: "/founder-story", icon: UserRound },
+      { label: "Store Customizer", href: "/customizer", icon: Palette },
+    ]
+  },
+  {
+    groupLabel: "Operations & Insights",
+    items: [
+      { label: "Financial Analysis", href: "/financials", icon: ScrollText },
+      { label: "Shopify Store Policies", href: "/policies", icon: ShieldCheck },
+      { label: "Operations Manual", href: "/manual", icon: BookOpen },
+    ]
+  }
 ];
 
 export default function Sidebar() {
@@ -83,7 +103,7 @@ export default function Sidebar() {
       )}
 
       <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 border-r border-[#4A154B]/10 bg-white/95 backdrop-blur-md flex flex-col h-screen
+        fixed inset-y-0 left-0 z-50 w-66 border-r border-[#4A154B]/10 bg-white/95 backdrop-blur-md flex flex-col h-screen
         transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:bg-white/60 lg:flex
         ${isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}
       `}>
@@ -93,7 +113,7 @@ export default function Sidebar() {
             <img 
               src="/logo.jpg" 
               alt="Reshmi Pallu" 
-              className="w-8 h-8 rounded-full object-cover border border-[#4A154B]/10 shadow-sm" 
+              className="w-9 h-9 rounded-full object-cover border border-[#4A154B]/10 shadow-sm" 
             />
             <div>
               <span className="font-display font-bold text-[#4A154B] text-lg block leading-none">
@@ -116,29 +136,45 @@ export default function Sidebar() {
         </div>
 
         {/* Navigation Links */}
-        <nav className="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && !(item.href === "/products" && pathname === "/products/add"));
-            const Icon = item.icon;
+        <nav className="flex-1 px-4 py-5 space-y-5 overflow-y-auto">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.groupLabel} className="space-y-1">
+              <span className="text-[10px] uppercase tracking-wider text-[#4A154B]/50 font-bold px-4 block mb-2">
+                {group.groupLabel}
+              </span>
+              
+              <div className="space-y-1">
+                {group.items.map((item) => {
+                  const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href) && !(item.href === "/products" && pathname === "/products/add"));
+                  const Icon = item.icon;
 
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                  isActive
-                    ? "bg-[#4A154B] text-white shadow-md shadow-[#4A154B]/10"
-                    : "text-[#1A1A1A]/70 hover:bg-[#4A154B]/5 hover:text-[#4A154B]"
-                }`}
-              >
-                <span className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-white' : 'text-[#4A154B]'}`}>
-                  <Icon size={18} />
-                </span>
-                {item.label}
-              </Link>
-            );
-          })}
+                  return (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      onClick={() => setIsOpen(false)}
+                      className={`flex items-center justify-between px-4 py-2.5 rounded-xl text-xs font-semibold transition-all duration-200 group ${
+                        isActive
+                          ? "bg-[#4A154B] text-white shadow-md shadow-[#4A154B]/10"
+                          : "text-[#1A1A1A]/75 hover:bg-[#4A154B]/5 hover:text-[#4A154B]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-[#D4AF37]' : 'text-[#4A154B]'}`}>
+                          <Icon size={16} />
+                        </span>
+                        {item.label}
+                      </div>
+                      
+                      {isActive && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#D4AF37]" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
 
         {/* Footer Profile & Logout */}

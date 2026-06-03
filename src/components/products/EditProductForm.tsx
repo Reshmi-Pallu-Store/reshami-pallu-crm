@@ -12,13 +12,11 @@ import {
   Percent, 
   Save, 
   Plus, 
-  Trash2,
-  Bookmark
+  Bookmark,
+  ArrowRight,
+  ArrowLeft,
+  Info
 } from "lucide-react";
-
-interface EditProductFormProps {
-  initialProduct: any;
-}
 
 const REGION_CODES: Record<string, string> = {
   "Banaras": "BNR",
@@ -46,28 +44,88 @@ const COLOR_CODES: Record<string, string> = {
   "Turquoise": "TRQ"
 };
 
+const COLOR_SWATCHES: Record<string, string> = {
+  "Red": "#E11D48",
+  "Blue": "#2563EB",
+  "Green": "#16A34A",
+  "Gold": "#D4AF37",
+  "Silver": "#CBD5E1",
+  "Pink": "#EC4899",
+  "White": "#FFFFFF",
+  "Black": "#1E293B",
+  "Maroon": "#800000",
+  "Purple": "#7C3AED",
+  "Cream": "#FDF6E2",
+  "Orange": "#EA580C",
+  "Yellow": "#FACC15",
+  "Turquoise": "#0D9488"
+};
+
+interface EditProductFormProps {
+  initialProduct: any;
+}
+
 export default function EditProductForm({ initialProduct }: EditProductFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [step, setStep] = useState(1);
 
   // Form State Pre-filled
   const [title, setTitle] = useState(initialProduct.title);
-  const [description, setDescription] = useState(initialProduct.descriptionHtml.replace(/<[^>]*>/g, "").replace(/<br\s*\/?>/gi, "\n"));
-  const [status, setStatus] = useState<"ACTIVE" | "DRAFT">(initialProduct.status);
-  const [price, setPrice] = useState(String(initialProduct.price));
+  const [description, setDescription] = useState(
+    initialProduct.descriptionHtml 
+      ? initialProduct.descriptionHtml.replace(/<[^>]*>/g, "").replace(/<br\s*\/?>/gi, "\n") 
+      : ""
+  );
+  const [status] = useState<"ACTIVE" | "DRAFT">("ACTIVE"); // Enforce active status per request
+  const [price, setPrice] = useState(String(initialProduct.price || ""));
   const [compareAtPrice, setCompareAtPrice] = useState(initialProduct.compareAtPrice ? String(initialProduct.compareAtPrice) : "");
   const [costPrice, setCostPrice] = useState(String(initialProduct.costPrice || ""));
-  const [stock, setStock] = useState(String(initialProduct.stock || "0"));
+  const [stock, setStock] = useState(String(initialProduct.stock ?? "0"));
   const [tags, setTags] = useState<string[]>(initialProduct.tags || []);
   const [newTag, setNewTag] = useState("");
 
   // Media
   const [images, setImages] = useState<Array<{ id: string, url: string }>>(initialProduct.images || []);
   const [uploadingImage, setUploadingImage] = useState(false);
-  const [video, setVideo] = useState<{ id: string, url: string } | null>(initialProduct.metafields.shortVideo || null);
+  const [video, setVideo] = useState<{ id: string, url: string } | null>(initialProduct.metafields?.shortVideo || null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [mediaStatuses, setMediaStatuses] = useState<Record<string, { status: string, error?: string | null }>>({});
   const [existingTags, setExistingTags] = useState<string[]>([]);
+
+  // AI Saree Studio State
+  const [aiLoading, setAiLoading] = useState(false);
+  const [modelTone, setModelTone] = useState("Olive Indian skin tone");
+  const [backgroundVibe, setBackgroundVibe] = useState("minimalist modern light-filled studio, terracotta planters, soft shadows");
+  const [customAiPrompt, setCustomAiPrompt] = useState("");
+  const [displayMode, setDisplayMode] = useState<"both" | "model_only">("both");
+  const [generationCount, setGenerationCount] = useState(1);
+  const [selectedPoses, setSelectedPoses] = useState<string[]>(["Front Pleats Detail"]);
+
+  const togglePose = (pose: string) => {
+    if (selectedPoses.includes(pose)) {
+      if (selectedPoses.length > 1) {
+        setSelectedPoses(selectedPoses.filter(p => p !== pose));
+      }
+    } else {
+      if (selectedPoses.length < generationCount) {
+        setSelectedPoses([...selectedPoses, pose]);
+      } else if (generationCount < 4) {
+        const newCount = generationCount + 1;
+        setGenerationCount(newCount);
+        setSelectedPoses([...selectedPoses, pose]);
+      } else {
+        setSelectedPoses([...selectedPoses.slice(1), pose]);
+      }
+    }
+  };
+
+  const handleGenerationCountChange = (count: number) => {
+    setGenerationCount(count);
+    if (selectedPoses.length > count) {
+      setSelectedPoses(selectedPoses.slice(0, count));
+    }
+  };
 
   useEffect(() => {
     fetch("/api/collections")
@@ -83,20 +141,20 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
   }, []);
 
   // Metafields
-  const [fabric, setFabric] = useState(initialProduct.metafields.fabric || "Pure Silk");
-  const [weave, setWeave] = useState(initialProduct.metafields.weave || "Kadhua");
+  const [fabric, setFabric] = useState(initialProduct.metafields?.fabric || "Pure Silk");
+  const [weave, setWeave] = useState(initialProduct.metafields?.weave || "Kadhua");
   const [selectedColors, setSelectedColors] = useState<string[]>(
-    initialProduct.metafields.colorFamily 
+    initialProduct.metafields?.colorFamily 
       ? initialProduct.metafields.colorFamily.split(",").map((c: string) => c.trim()).filter(Boolean)
       : ["Red"]
   );
-  const [occasion, setOccasion] = useState(initialProduct.metafields.occasion || "Bridal");
-  const [region, setRegion] = useState(initialProduct.metafields.region || "Banaras");
-  const [blouseIncluded, setBlouseIncluded] = useState(initialProduct.metafields.blouseIncluded ?? true);
-  const [blouseLength, setBlouseLength] = useState(initialProduct.metafields.blouseLength || "0.8 meters");
-  const [sareeLength, setSareeLength] = useState(parseFloat(initialProduct.metafields.sareeLength || "6.0").toFixed(1));
-  const [washCare, setWashCare] = useState(initialProduct.metafields.washCare || "Dry Clean Only");
-  const [foundersExclusive, setFoundersExclusive] = useState(initialProduct.metafields.foundersExclusive ?? false);
+  const [occasion, setOccasion] = useState(initialProduct.metafields?.occasion || "Bridal");
+  const [region, setRegion] = useState(initialProduct.metafields?.region || "Banaras");
+  const [blouseIncluded, setBlouseIncluded] = useState(initialProduct.metafields?.blouseIncluded ?? true);
+  const [blouseLength, setBlouseLength] = useState(initialProduct.metafields?.blouseLength || "0.8 meters");
+  const [sareeLength, setSareeLength] = useState(parseFloat(initialProduct.metafields?.sareeLength || "6.0").toFixed(1));
+  const [washCare, setWashCare] = useState(initialProduct.metafields?.washCare || "Dry Clean Only");
+  const [foundersExclusive, setFoundersExclusive] = useState(initialProduct.metafields?.foundersExclusive ?? false);
   const [privateNotes, setPrivateNotes] = useState(initialProduct.privateNotes || "");
 
   // Dynamic Options lists loaded from Upstash Redis
@@ -114,36 +172,29 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
   const [customColorFamily, setCustomColorFamily] = useState("");
   const [showCustomColor, setShowCustomColor] = useState(false);
 
-  // Load custom options on page mount
-  useEffect(() => {
-    const fetchOptions = async () => {
-      try {
-        const res = await fetch("/api/options");
-        if (res.ok) {
-          const data = await res.json();
-          setCustomRegions(data.regions || []);
-          setCustomFabrics(data.fabrics || []);
-          setCustomWeaves(data.weaves || []);
-          setCustomOccasions(data.occasions || []);
-          setCustomColorFamilies(data.colorFamilies || []);
-        }
-      } catch (err) {
-        console.error("Failed to load options", err);
-      }
-    };
-    fetchOptions();
-  }, []);
-
-  // Selector dynamic lists (injected with initial values dynamically to guarantee selection compatibility)
-  const regionOptions = Array.from(new Set(["Banaras", "Kanchipuram", "Chanderi", "Kalamkari", "Mysore", ...customRegions, initialProduct.metafields.region, "Other"])).filter(Boolean) as string[];
+  // Dynamic selector options
+  const regionOptions = Array.from(new Set(["Banaras", "Kanchipuram", "Chanderi", "Kalamkari", "Mysore", ...customRegions, "Other"])).filter(Boolean) as string[];
   const colorFamilyOptions = Array.from(new Set([
     "Red", "Blue", "Green", "Gold", "Silver", "Pink", "White", "Black", "Maroon", "Purple", "Cream", "Orange", "Yellow", "Turquoise", 
-    ...customColorFamilies, 
-    ...(initialProduct.metafields.colorFamily ? initialProduct.metafields.colorFamily.split(",").map((c: string) => c.trim()) : [])
+    ...customColorFamilies
   ])).filter(Boolean) as string[];
-  const fabricOptions = Array.from(new Set(["Pure Katan Silk", "Pure Silk", "Chanderi Silk", "Georgette", "Organza", "Tissue Silk", "Cotton", ...customFabrics, initialProduct.metafields.fabric, "Other"])).filter(Boolean) as string[];
-  const weaveOptions = Array.from(new Set(["Kadhua", "Jamdani", "Ikat", "Meenakari", "Fekwa", ...customWeaves, initialProduct.metafields.weave, "Other"])).filter(Boolean) as string[];
-  const occasionOptions = Array.from(new Set(["Bridal", "Festive", "Cocktail", "Casual", ...customOccasions, initialProduct.metafields.occasion, "Other"])).filter(Boolean) as string[];
+  const fabricOptions = Array.from(new Set(["Pure Katan Silk", "Pure Silk", "Chanderi Silk", "Georgette", "Organza", "Tissue Silk", "Cotton", ...customFabrics, "Other"])).filter(Boolean) as string[];
+  const weaveOptions = Array.from(new Set(["Kadhua", "Jamdani", "Ikat", "Meenakari", "Fekwa", ...customWeaves, "Other"])).filter(Boolean) as string[];
+  const occasionOptions = Array.from(new Set(["Bridal", "Festive", "Cocktail", "Casual", ...customOccasions, "Other"])).filter(Boolean) as string[];
+
+  // Load custom options on mount
+  useEffect(() => {
+    fetch("/api/options")
+      .then(res => res.json())
+      .then(data => {
+        setCustomRegions(data.regions || []);
+        setCustomFabrics(data.fabrics || []);
+        setCustomWeaves(data.weaves || []);
+        setCustomOccasions(data.occasions || []);
+        setCustomColorFamilies(data.colorFamilies || []);
+      })
+      .catch(() => {});
+  }, []);
 
   // Live Margin Calculation
   const priceVal = parseFloat(price) || 0;
@@ -156,12 +207,55 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
     return "text-red-600 bg-red-50 border-red-200";
   };
 
+  // Validation state variables
+  const isStep1Valid = 
+    title.trim() !== "" && 
+    selectedColors.length > 0 && 
+    fabric !== "" && 
+    occasion !== "" &&
+    (region !== "Other" || customRegion.trim() !== "") &&
+    (fabric !== "Other" || customFabric.trim() !== "") &&
+    (weave !== "Other" || customWeave.trim() !== "") &&
+    (occasion !== "Other" || customOccasion.trim() !== "");
+
+  const isStep2Valid = true; // Media uploading is optional for validation
+
+  const isStep3Valid = 
+    price.trim() !== "" && 
+    stock.trim() !== "";
+
+  const renderRequiredBadge = () => (
+    <span className="text-[9px] uppercase tracking-wider font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded-md border border-red-200 ml-1.5 select-none animate-pulse">
+      Required
+    </span>
+  );
+
+  const renderStep1Checklist = () => {
+    return (
+      <div className="hidden lg:flex items-center gap-3 text-[10px] font-bold text-[#1A1A1A]/60 bg-white/40 border border-[#4A154B]/5 rounded-xl px-3 py-1.5 backdrop-blur-sm shadow-inner select-none animate-fadeIn">
+        <span className="text-[#4A154B]/60 uppercase tracking-wider border-r border-[#4A154B]/10 pr-2.5">Progress Checklist:</span>
+        <span className={`flex items-center gap-1 transition-colors ${title.trim() !== "" ? "text-green-600 font-bold" : "text-[#1A1A1A]/40"}`}>
+          <span className="inline-block text-xs">{title.trim() !== "" ? "✓" : "○"}</span> Title
+        </span>
+        <span className={`flex items-center gap-1 transition-colors ${selectedColors.length > 0 ? "text-green-600 font-bold" : "text-[#1A1A1A]/40"}`}>
+          <span className="inline-block text-xs">{selectedColors.length > 0 ? "✓" : "○"}</span> Color
+        </span>
+        <span className={`flex items-center gap-1 transition-colors ${fabric !== "" ? "text-green-600 font-bold" : "text-[#1A1A1A]/40"}`}>
+          <span className="inline-block text-xs">{fabric !== "" ? "✓" : "○"}</span> Fabric
+        </span>
+        <span className={`flex items-center gap-1 transition-colors ${occasion !== "" ? "text-green-600 font-bold" : "text-[#1A1A1A]/40"}`}>
+          <span className="inline-block text-xs">{occasion !== "" ? "✓" : "○"}</span> Occasion
+        </span>
+      </div>
+    );
+  };
+
+  // Image Upload handler
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
     setUploadingImage(true);
-    
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
       const formData = new FormData();
@@ -175,16 +269,78 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
 
         if (!res.ok) throw new Error("Upload failed");
         const data = await res.json();
-        setImages(prev => [...prev, data]);
+        setImages(prev => {
+          if (prev.some(img => img.id === data.id)) return prev;
+          return [...prev, data];
+        });
         setMediaStatuses(prev => ({ ...prev, [data.id]: { status: "queued" } }));
       } catch (err) {
         alert("Image upload failed: " + (err as Error).message);
       }
     }
-    
     setUploadingImage(false);
   };
 
+  // AI Saree Studio Generation handler
+  const handleAiGeneration = async () => {
+    const rawSareeImages = images.filter(img => !img.id.startsWith("media_ai_"));
+
+    if (rawSareeImages.length === 0) {
+      alert("❌ Please upload at least one raw saree image first to use as a source.");
+      return;
+    }
+
+    if (selectedPoses.length === 0) {
+      alert("❌ Please select at least one pose for generation.");
+      return;
+    }
+
+    setAiLoading(true);
+
+    try {
+      const res = await fetch("/api/admin/generate-shoot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mediaIds: rawSareeImages.map(img => img.id),
+          modelTone,
+          backgroundVibe,
+          customPrompt: customAiPrompt,
+          poses: selectedPoses
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "AI shoot generation failed");
+      }
+
+      const data = await res.json();
+      
+      if (data.items && Array.isArray(data.items)) {
+        setImages(prev => [...prev, ...data.items]);
+        setMediaStatuses(prev => {
+          const next = { ...prev };
+          data.items.forEach((item: any) => {
+            next[item.id] = { status: "queued" };
+          });
+          return next;
+        });
+      }
+      
+      if (data.description && !customAiPrompt) {
+        setCustomAiPrompt(data.description);
+      }
+      
+      alert(`🌟 AI Model Shoot completed! ${data.items?.length || 1} generated image(s) have been added to your gallery and are optimization-syncing to Shopify in the background.`);
+    } catch (err: any) {
+      alert("❌ AI Generation failed: " + err.message);
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Video Upload handler
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -242,6 +398,7 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
     (item) => item.status === "queued" || item.status === "processing"
   );
 
+  // Tag Management
   const addTag = () => {
     if (tags.length >= 3) {
       alert("❌ You can add a maximum of 3 tags to a particular Saree.");
@@ -257,6 +414,7 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
     setTags(tags.filter(tag => tag !== t));
   };
 
+  // Update Saree Form submit handler
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -276,28 +434,19 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
     // Check mandatory fields
     if (!finalColorFamily) {
       alert("❌ Error: Colour is mandatory. Please select a color.");
+      setStep(1);
       setLoading(false);
       return;
     }
     if (!finalFabric) {
       alert("❌ Error: Fabric Type is mandatory. Please select a fabric.");
+      setStep(1);
       setLoading(false);
       return;
     }
     if (!finalOccasion) {
       alert("❌ Error: Occasion Curation is mandatory. Please select an occasion.");
-      setLoading(false);
-      return;
-    }
-
-    if (
-      (region === "Other" && !finalRegion) ||
-      (fabric === "Other" && !finalFabric) ||
-      (weave === "Other" && !finalWeave) ||
-      (occasion === "Other" && !finalOccasion) ||
-      (!finalColorFamily)
-    ) {
-      alert("❌ Error: Please specify a custom text name for the fields selected as 'Other'.");
+      setStep(1);
       setLoading(false);
       return;
     }
@@ -345,6 +494,11 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
         await Promise.all(savePromises);
       }
 
+      // Filter images based on selected storefront display mode
+      const finalImages = displayMode === "model_only"
+        ? images.filter(img => img.id.startsWith("media_ai_"))
+        : images;
+
       // 2. Prepare Shopify / Redis payload
       const payload = {
         id: initialProduct.id,
@@ -356,7 +510,7 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
         costPrice: parseFloat(costPrice || "0"),
         stock: parseInt(stock || "0"),
         tags,
-        images,
+        images: finalImages,
         metafields: {
           fabric: finalFabric,
           weave: finalWeave,
@@ -381,7 +535,7 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
 
       if (!res.ok) {
         const errData = await res.json();
-        throw new Error(errData.error || "Failed to update product");
+        throw new Error(errData.error || "Failed to save product");
       }
 
       router.push("/products");
@@ -394,606 +548,1150 @@ export default function EditProductForm({ initialProduct }: EditProductFormProps
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 sm:space-y-8">
-      
-      {/* Header Actions */}
-      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center bg-white/40 border border-[#4A154B]/10 rounded-xl p-4 gap-4 backdrop-blur-md">
-        <div className="flex items-center justify-between sm:justify-start gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-[#4A154B]/60">Save Status:</span>
-          <select 
-            value={status} 
-            onChange={(e) => setStatus(e.target.value as any)}
-            className="bg-white border border-[#4A154B]/20 text-[#4A154B] rounded px-2.5 py-1 text-xs font-semibold focus:outline-none"
+    <div>
+      {/* New Glowing Stepped Progress Bar */}
+      <div className="max-w-3xl mx-auto mb-10 relative px-4">
+        {/* Connecting Track Line */}
+        <div className="absolute top-5 left-8 right-8 h-0.5 bg-[#4A154B]/10 -translate-y-1/2 z-0" />
+        <div 
+          className="absolute top-5 left-8 h-0.5 bg-gradient-to-r from-[#4A154B] to-[#D4AF37] -translate-y-1/2 z-0 transition-all duration-500 ease-in-out" 
+          style={{ width: step === 1 ? "0%" : step === 2 ? "50%" : "100%" }}
+        />
+
+        <div className="flex justify-between relative z-10">
+          {/* Step 1 */}
+          <button 
+            type="button" 
+            onClick={() => setStep(1)} 
+            className="flex flex-col items-center gap-2 group cursor-pointer focus:outline-none"
           >
-            <option value="DRAFT">Draft Listing</option>
-            <option value="ACTIVE">Active (Publish Live)</option>
-          </select>
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="btn-primary flex items-center gap-1.5 py-2 px-6 text-xs uppercase tracking-wider font-semibold shadow-md"
-        >
-          <Save size={14} />
-          {loading ? "Saving changes..." : "Save Product"}
-        </button>
-      </div>
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 shadow-sm !cursor-pointer ${
+              step >= 1 
+                ? "bg-[#4A154B] text-white ring-4 ring-[#4A154B]/10" 
+                : "bg-white text-[#1A1A1A]/40 border border-[#4A154B]/20"
+            }`}>
+              1
+            </div>
+            <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors duration-300 ${
+              step === 1 ? "text-[#4A154B]" : "text-[#1A1A1A]/40"
+            }`}>
+              1. Story &amp; Weave
+            </span>
+          </button>
 
-      {/* Product Image Preview */}
-      {initialProduct.imageUrl && (
-        <div className="ui-card p-4 flex items-center gap-4">
-          <img src={initialProduct.imageUrl} alt={initialProduct.title} className="w-16 h-16 rounded-lg object-cover border border-[#4A154B]/10 bg-white" />
-          <div>
-            <span className="text-xs text-[#1A1A1A]/40 uppercase font-bold tracking-wider">Currently active photo</span>
-            <span className="text-sm font-semibold text-[#4A154B] block mt-0.5">{initialProduct.title}</span>
-          </div>
-        </div>
-      )}
+          {/* Step 2 */}
+          <button 
+            type="button" 
+            onClick={() => {
+              if (isStep1Valid) setStep(2);
+            }} 
+            disabled={!isStep1Valid}
+            className={`flex flex-col items-center gap-2 group focus:outline-none ${!isStep1Valid ? "opacity-50 !cursor-not-allowed" : "!cursor-pointer"}`}
+          >
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 shadow-sm ${
+              step >= 2 
+                ? "bg-[#4A154B] text-white ring-4 ring-[#4A154B]/10" 
+                : "bg-white text-[#1A1A1A]/40 border border-[#4A154B]/20"
+            }`}>
+              2
+            </div>
+            <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors duration-300 ${
+              step === 2 ? "text-[#4A154B]" : "text-[#1A1A1A]/40"
+            }`}>
+              2. Media &amp; AI twins
+            </span>
+          </button>
 
-      {/* Saree Details */}
-      <div className="ui-card p-6 sm:p-8 space-y-6">
-        <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
-          <Bookmark size={16} />
-          Saree Descriptions
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="flex flex-col gap-2 md:col-span-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Saree Title</label>
-            <input
-              type="text"
-              required
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="glass-input"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
-              <Tag size={12} className="text-[#D4AF37]" />
-              SKU Code
-            </label>
-            <input
-              type="text"
-              disabled
-              value={initialProduct.sku}
-              className="glass-input text-center font-mono font-bold bg-[#FAF8F5]/80 text-[#4A154B]/70 border-[#4A154B]/10"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Product Description</label>
-          <textarea
-            rows={4}
-            required
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="glass-input resize-none"
-          />
+          {/* Step 3 */}
+          <button 
+            type="button" 
+            onClick={() => {
+              if (isStep1Valid && isStep2Valid) setStep(3);
+            }} 
+            disabled={!isStep1Valid}
+            className={`flex flex-col items-center gap-2 group focus:outline-none ${!isStep1Valid ? "opacity-50 !cursor-not-allowed" : "!cursor-pointer"}`}
+          >
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-all duration-300 shadow-sm ${
+              step >= 3 
+                ? "bg-[#4A154B] text-white ring-4 ring-[#4A154B]/10" 
+                : "bg-white text-[#1A1A1A]/40 border border-[#4A154B]/20"
+            }`}>
+              3
+            </div>
+            <span className={`text-[10px] uppercase font-bold tracking-wider transition-colors duration-300 ${
+              step === 3 ? "text-[#4A154B]" : "text-[#1A1A1A]/40"
+            }`}>
+              3. Price &amp; Curation
+            </span>
+          </button>
         </div>
       </div>
 
-      {/* Financials & Stock */}
-      <div className="ui-card p-6 sm:p-8 space-y-6">
-        <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
-          <DollarSign size={16} />
-          Financials &amp; Stock levels
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-          {/* Retail Price */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Selling Price (INR)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-xs font-bold text-[#1A1A1A]/50">₹</span>
-              <input
-                type="number"
-                required
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                className="glass-input pl-6 w-full"
-              />
-            </div>
+      <form onSubmit={handleSubmit} className="space-y-8">
+        
+        {/* Persistant Top Bar Redesigned with Next Step and Back Button */}
+        <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center bg-white/50 border border-[#4A154B]/10 rounded-2xl p-4 gap-4 backdrop-blur-md">
+          <div className="flex items-center gap-2 border border-green-200 bg-green-50 px-2.5 py-1 rounded-md text-[10px] font-bold text-green-700 uppercase tracking-wider select-none">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+            <span>Auto-Publish Enabled (Live)</span>
           </div>
+          
+          <div className="flex items-center gap-3">
+            {/* Render active progress checklist widget in step 1 */}
+            {step === 1 && renderStep1Checklist()}
 
-          {/* Compare at Price */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Compare-at Price (INR)</label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-xs font-bold text-[#1A1A1A]/50">₹</span>
-              <input
-                type="number"
-                value={compareAtPrice}
-                onChange={(e) => setCompareAtPrice(e.target.value)}
-                placeholder="25000"
-                className="glass-input pl-6 w-full"
-              />
-            </div>
-          </div>
-
-          {/* Cost Price */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Private Cost Price</label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-xs font-bold text-[#1A1A1A]/50">₹</span>
-              <input
-                type="number"
-                value={costPrice}
-                onChange={(e) => setCostPrice(e.target.value)}
-                className="glass-input pl-6 w-full"
-              />
-            </div>
-          </div>
-
-          {/* Stock Quantity */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Stock Quantity</label>
-            <input
-              type="number"
-              required
-              min="0"
-              value={stock}
-              onChange={(e) => setStock(e.target.value)}
-              className="glass-input text-center font-bold"
-            />
-          </div>
-
-          {/* Margin feedback */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
-              <Percent size={12} />
-              Profit Margin
-            </label>
-            <div className={`rounded-lg border p-2.5 text-center font-bold text-sm ${getMarginColor()}`}>
-              {priceVal > 0 ? `${profitMargin.toFixed(0)}% Margin` : "Pending Prices"}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Specs */}
-      <div className="ui-card p-6 sm:p-8 space-y-6">
-        <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
-          <Layers size={16} />
-          Saree Specifications (metafields)
-        </h3>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {/* Region */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
-              Region of Origin
-              <span className="text-[10px] text-[#1A1A1A]/40 font-normal lowercase">(Optional)</span>
-            </label>
-            <select value={region} onChange={(e) => setRegion(e.target.value)} className="glass-input bg-white">
-              <option value="">None Selected</option>
-              {regionOptions.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-            {region === "Other" && (
-              <input
-                type="text"
-                required
-                value={customRegion}
-                onChange={(e) => setCustomRegion(e.target.value)}
-                placeholder="Type custom region..."
-                className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
-              />
-            )}
-          </div>
-
-          {/* Color Family */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
-              Color Families
-              <span className="text-[10px] text-red-500 font-bold">* Required</span>
-            </label>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {colorFamilyOptions.filter(c => c !== "Other").map(c => {
-                const isSelected = selectedColors.includes(c);
-                return (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      if (isSelected) {
-                        setSelectedColors(prev => prev.filter(color => color !== c));
-                      } else {
-                        setSelectedColors(prev => [...prev, c]);
-                      }
-                    }}
-                    className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors border ${
-                      isSelected 
-                        ? 'bg-[#4A154B] text-white border-[#4A154B]' 
-                        : 'bg-white text-soft-black border-soft-black/20 hover:border-soft-black/40'
-                    }`}
-                  >
-                    {c}
-                  </button>
-                );
-              })}
+            {/* Back button (top) */}
+            {step > 1 && (
               <button
                 type="button"
-                onClick={() => setShowCustomColor(!showCustomColor)}
-                className={`px-3 py-1 rounded-full text-[11px] font-medium transition-colors border ${
-                  showCustomColor 
-                    ? 'bg-[#4A154B] text-white border-[#4A154B]' 
-                    : 'bg-white text-soft-black border-dashed border-soft-black/30 hover:border-soft-black/50'
+                onClick={() => setStep(prev => prev - 1)}
+                className="btn-secondary flex items-center gap-1.5 py-2.5 px-4 text-xs uppercase tracking-wider font-bold !cursor-pointer"
+              >
+                <ArrowLeft size={12} />
+                Back
+              </button>
+            )}
+
+            {/* Next Step button (top) */}
+            {step < 3 && (
+              <button
+                type="button"
+                onClick={() => setStep(prev => prev + 1)}
+                disabled={step === 1 ? !isStep1Valid : !isStep2Valid}
+                className={`btn-primary flex items-center gap-1.5 py-2.5 px-5 text-xs uppercase tracking-wider font-bold shadow-md transition-all ${
+                  (step === 1 ? !isStep1Valid : !isStep2Valid) 
+                    ? "opacity-45 bg-[#FAF8F5] text-[#1A1A1A]/40 border-gray-300 shadow-none !cursor-not-allowed" 
+                    : "!cursor-pointer"
                 }`}
               >
-                + Custom
+                Next Step
+                <ArrowRight size={12} />
               </button>
-            </div>
-            {showCustomColor && (
-              <input
-                type="text"
-                required
-                value={customColorFamily}
-                onChange={(e) => setCustomColorFamily(e.target.value)}
-                placeholder="Type custom color..."
-                className="glass-input mt-2 focus:border-[#4A154B] text-xs"
-              />
             )}
-          </div>
 
-          {/* Fabric */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
-              Fabric Type
-              <span className="text-[10px] text-red-500 font-bold">* Required</span>
-            </label>
-            <select value={fabric} onChange={(e) => setFabric(e.target.value)} className="glass-input bg-white border-red-500/20">
-              <option value="">None Selected</option>
-              {fabricOptions.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
-            {fabric === "Other" && (
-              <input
-                type="text"
-                required
-                value={customFabric}
-                onChange={(e) => setCustomFabric(e.target.value)}
-                placeholder="Type custom fabric..."
-                className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
-              />
-            )}
-          </div>
-
-          {/* Weave */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
-              Weave Style
-              <span className="text-[10px] text-[#1A1A1A]/40 font-normal lowercase">(Optional)</span>
-            </label>
-            <select value={weave} onChange={(e) => setWeave(e.target.value)} className="glass-input bg-white">
-              <option value="">None Selected</option>
-              {weaveOptions.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
-            {weave === "Other" && (
-              <input
-                type="text"
-                required
-                value={customWeave}
-                onChange={(e) => setCustomWeave(e.target.value)}
-                placeholder="Type custom weave..."
-                className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
-              />
-            )}
-          </div>
-
-          {/* Occasion */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
-              Occasion Curation
-              <span className="text-[10px] text-red-500 font-bold">* Required</span>
-            </label>
-            <select value={occasion} onChange={(e) => setOccasion(e.target.value)} className="glass-input bg-white border-red-500/20">
-              <option value="">None Selected</option>
-              {occasionOptions.map(o => <option key={o} value={o}>{o}</option>)}
-            </select>
-            {occasion === "Other" && (
-              <input
-                type="text"
-                required
-                value={customOccasion}
-                onChange={(e) => setCustomOccasion(e.target.value)}
-                placeholder="Type custom occasion..."
-                className="glass-input mt-1.5 focus:border-[#4A154B] text-xs"
-              />
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Blouse Piece Included?</label>
-            <select 
-              value={blouseIncluded ? "yes" : "no"} 
-              onChange={(e) => setBlouseIncluded(e.target.value === "yes")} 
-              className="glass-input bg-white font-semibold"
-            >
-              <option value="yes">Yes, Blouse Included</option>
-              <option value="no">No Blouse Piece</option>
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Blouse Length</label>
-            <input 
-              type="text" 
-              value={blouseIncluded ? blouseLength : "N/A"} 
-              onChange={(e) => setBlouseLength(e.target.value)} 
-              disabled={!blouseIncluded}
-              className={`glass-input ${!blouseIncluded ? "bg-[#1A1A1A]/5 text-[#1A1A1A]/40 cursor-not-allowed border-[#1A1A1A]/10 font-semibold" : ""}`} 
-            />
-          </div>
-
-          {/* Saree Length */}
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Saree Length (meters) *</label>
-            <input 
-              type="number" 
-              step="0.1" 
-              min="0.1" 
-              value={sareeLength} 
-              onChange={(e) => setSareeLength(e.target.value)} 
-              required 
-              className="glass-input font-semibold" 
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Wash Care</label>
-            <textarea
-              value={washCare}
-              onChange={(e) => setWashCare(e.target.value)}
-              rows={3}
-              className="glass-input resize-none"
-              placeholder="e.g. Dry clean preferred. Do not machine wash..."
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Storefront Tags</label>
-            <div className="flex gap-2">
-              <input 
-                type="text" 
-                value={newTag} 
-                onChange={(e) => setNewTag(e.target.value)} 
-                placeholder="e.g. Zari"
-                className="glass-input flex-1 py-1 px-2 text-xs" 
-              />
-              <button type="button" onClick={addTag} className="btn-secondary py-1.5 px-3 flex items-center justify-center">
-                <Plus size={14} />
+            {/* Final save button */}
+            {step === 3 && (
+              <button
+                type="submit"
+                disabled={loading || uploadingImage || uploadingVideo || isMediaSyncing || !isStep3Valid}
+                className={`btn-primary flex items-center gap-1.5 py-2.5 px-6 text-xs uppercase tracking-wider font-bold shadow-md transition-all ${
+                  (!isStep3Valid || loading || uploadingImage || uploadingVideo || isMediaSyncing)
+                    ? "opacity-45 bg-gray-200 text-gray-400 !cursor-not-allowed shadow-none border-gray-300"
+                    : "!cursor-pointer"
+                }`}
+              >
+                <Save size={14} />
+                {loading ? "Publishing..." : "Save Product"}
               </button>
-            </div>
-            {existingTags.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
-                <span className="text-[10px] text-[#1A1A1A]/50 font-bold uppercase">Quick Add:</span>
-                {existingTags.map(tagSuggestion => (
-                  <button
-                    key={tagSuggestion}
-                    type="button"
-                    onClick={() => {
-                      if (tags.length >= 3) {
-                        alert("❌ You can add a maximum of 3 tags to a particular Saree.");
-                        return;
-                      }
-                      if (!tags.includes(tagSuggestion)) {
-                        setTags([...tags, tagSuggestion]);
-                      }
-                    }}
-                    className="bg-[#4A154B]/5 hover:bg-[#4A154B]/10 border border-[#4A154B]/10 rounded-full px-2.5 py-0.5 text-[10px] text-[#4A154B] font-semibold transition cursor-pointer"
-                  >
-                    + {tagSuggestion}
-                  </button>
-                ))}
-              </div>
             )}
           </div>
         </div>
 
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-2">
-            {tags.map(t => (
-              <span key={t} className="flex items-center gap-1.5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-full px-2.5 py-1 text-[11px] font-semibold text-[#4A154B]">
-                {t}
-                <button type="button" onClick={() => removeTag(t)} className="text-red-500 hover:text-red-700 font-bold focus:outline-none">×</button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
+        {/* STEP 1: Saree Aesthetics & Story */}
+        {step === 1 && (
+          <div className="space-y-6 animate-fadeIn">
+            
+            {/* Visual Core Description */}
+            <div className="ui-card p-6 sm:p-8 space-y-6">
+              <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
+                <Bookmark size={18} className="text-[#D4AF37]" />
+                1. Saree Story &amp; Details
+              </h3>
 
-      {/* Media */}
-      <div className="ui-card p-6 sm:p-8 space-y-6">
-        <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
-          <ImageIcon size={16} />
-          Cloud media assets
-        </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Title */}
+                <div className="flex flex-col gap-2 md:col-span-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Saree Title
+                    {renderRequiredBadge()}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g. Handwoven Pure Banarasi Katan Silk Saree"
+                    className="glass-input"
+                  />
+                </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Image upload */}
-          <div>
-            <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center min-h-[220px]">
-              <ImageIcon size={32} className="text-[#4A154B]/40 mb-3" />
-              <span className="text-xs font-bold text-[#4A154B]">Upload Saree Photos</span>
-              <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
-                <strong>Recommended:</strong> JPEG, PNG, or WebP<br />
-                <strong>Dimensions:</strong> 2:3 Vertical Ratio (e.g., 1000 x 1500 px)<br />
-                <strong>File Size:</strong> Under 5 MB per photo
-              </span>
-              <input 
-                type="file" 
-                multiple
-                accept="image/*" 
-                onChange={handleImageUpload} 
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                disabled={uploadingImage}
-              />
-              {uploadingImage && <div className="text-xs text-[#4A154B] font-semibold animate-pulse mt-2">Uploading Photo...</div>}
+                {/* SKU (Static Display for Edit) */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
+                    <Tag size={12} className="text-[#D4AF37]" />
+                    SKU Identifier (Non-editable)
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={initialProduct.sku}
+                    className="glass-input text-center font-mono font-bold bg-[#FAF8F5]/80 text-[#4A154B] border-[#4A154B]/25 select-all !cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              {/* Description */}
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">The Design Story (Product Description)</label>
+                <textarea
+                  rows={5}
+                  required
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Write a beautiful narrative about the weaving origin, pallu designs, border detailing, and draping grace..."
+                  className="glass-input resize-none"
+                />
+              </div>
             </div>
 
-            {/* Previews of uploaded images */}
-            {images.length > 0 && (
-              <div className="grid grid-cols-3 gap-3 w-full mt-4">
-                {images.map((img, index) => {
-                  const status = mediaStatuses[img.id]?.status || "ready";
-                  const isSyncing = status === "queued" || status === "processing";
-                  const isFailed = status === "failed";
-                  return (
-                    <div key={img.id || index} className="relative aspect-[2/3] rounded-lg overflow-hidden border border-[#4A154B]/10 bg-[#FAF8F5]">
-                      <img src={img.url} alt={`Uploaded ${index + 1}`} className="object-cover w-full h-full" />
-                      {isSyncing && (
-                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-2">
-                          <span className="text-[10px] font-bold text-white uppercase animate-pulse">Syncing...</span>
-                          <span className="text-[9px] text-white/80 mt-0.5">{status === "queued" ? "Queued" : "Optimizing"}</span>
-                        </div>
-                      )}
-                      {isFailed && (
-                        <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-center p-2 text-white">
-                          <span className="text-[10px] font-bold uppercase">Failed</span>
-                        </div>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => setImages(prev => prev.filter((_, i) => i !== index))}
-                        className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer z-10"
-                        aria-label="Remove image"
+            {/* Saree Weave Specifications - OVERHAULED TO MODERN GRID CARD SELECTORS */}
+            <div className="ui-card p-6 sm:p-8 space-y-6">
+              <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
+                <Layers size={18} className="text-[#D4AF37]" />
+                2. Weave Details &amp; Specifications
+              </h3>
+
+              <div className="space-y-6">
+                
+                {/* Fabric Type Grid Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Fabric Material
+                    {renderRequiredBadge()}
+                  </label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {fabricOptions.map((fOpt) => {
+                      const isSelected = fabric === fOpt;
+                      return (
+                        <button
+                          type="button"
+                          key={fOpt}
+                          onClick={() => setFabric(fOpt)}
+                          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all duration-200 border !cursor-pointer ${
+                            isSelected 
+                              ? 'bg-[#4A154B] text-[#D4AF37] border-[#4A154B] shadow-md scale-102' 
+                              : 'bg-white text-soft-black border-soft-black/10 hover:border-soft-black/25'
+                          }`}
+                        >
+                          {fOpt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {fabric === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customFabric}
+                      onChange={(e) => setCustomFabric(e.target.value)}
+                      placeholder="Type custom fabric type..."
+                      className="glass-input mt-2 max-w-md animate-fadeIn"
+                    />
+                  )}
+                </div>
+
+                {/* Weave Style Grid Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Weave Style
+                    <span className="text-[10px] text-[#1A1A1A]/40 font-normal lowercase italic ml-2">(Pre-selected or Custom)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {weaveOptions.map((wOpt) => {
+                      const isSelected = weave === wOpt;
+                      return (
+                        <button
+                          type="button"
+                          key={wOpt}
+                          onClick={() => setWeave(wOpt)}
+                          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all duration-200 border !cursor-pointer ${
+                            isSelected 
+                              ? 'bg-[#4A154B] text-[#D4AF37] border-[#4A154B] shadow-md scale-102' 
+                              : 'bg-white text-soft-black border-soft-black/10 hover:border-soft-black/25'
+                          }`}
+                        >
+                          {wOpt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {weave === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customWeave}
+                      onChange={(e) => setCustomWeave(e.target.value)}
+                      placeholder="Type custom weave style..."
+                      className="glass-input mt-2 max-w-md animate-fadeIn"
+                    />
+                  )}
+                </div>
+
+                {/* Occasion Curation Grid Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Occasion Curation
+                    {renderRequiredBadge()}
+                  </label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {occasionOptions.map((oOpt) => {
+                      const isSelected = occasion === oOpt;
+                      return (
+                        <button
+                          type="button"
+                          key={oOpt}
+                          onClick={() => setOccasion(oOpt)}
+                          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all duration-200 border !cursor-pointer ${
+                            isSelected 
+                              ? 'bg-[#4A154B] text-[#D4AF37] border-[#4A154B] shadow-md scale-102' 
+                              : 'bg-white text-soft-black border-soft-black/10 hover:border-soft-black/25'
+                          }`}
+                        >
+                          {oOpt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {occasion === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customOccasion}
+                      onChange={(e) => setCustomOccasion(e.target.value)}
+                      placeholder="Type custom occasion category..."
+                      className="glass-input mt-2 max-w-md animate-fadeIn"
+                    />
+                  )}
+                </div>
+
+                {/* Region of Origin Grid Selection */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Region of Origin Heritage
+                    <span className="text-[10px] text-[#1A1A1A]/40 font-normal lowercase italic ml-2">(Optional Heritage mapping)</span>
+                  </label>
+                  <div className="flex flex-wrap gap-2.5">
+                    {regionOptions.map((rOpt) => {
+                      const isSelected = region === rOpt;
+                      return (
+                        <button
+                          type="button"
+                          key={rOpt}
+                          onClick={() => setRegion(rOpt)}
+                          className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition-all duration-200 border !cursor-pointer ${
+                            isSelected 
+                              ? 'bg-[#4A154B] text-[#D4AF37] border-[#4A154B] shadow-md scale-102' 
+                              : 'bg-white text-soft-black border-soft-black/10 hover:border-soft-black/25'
+                          }`}
+                        >
+                          {rOpt}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {region === "Other" && (
+                    <input
+                      type="text"
+                      required
+                      value={customRegion}
+                      onChange={(e) => setCustomRegion(e.target.value)}
+                      placeholder="Type custom region..."
+                      className="glass-input mt-2 max-w-md animate-fadeIn"
+                    />
+                  )}
+                </div>
+
+                {/* Color Families Selection with Hex Swatches */}
+                <div className="space-y-3 pt-2 border-t border-[#4A154B]/5">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Color Family Swatches
+                    {renderRequiredBadge()}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {colorFamilyOptions.map((colorName) => {
+                      const swatch = COLOR_SWATCHES[colorName];
+                      const isSelected = selectedColors.includes(colorName);
+                      return (
+                        <button
+                          key={colorName}
+                          type="button"
+                          onClick={() => {
+                            if (isSelected) {
+                              setSelectedColors(prev => prev.filter(c => c !== colorName));
+                            } else {
+                              setSelectedColors(prev => [...prev, colorName]);
+                            }
+                          }}
+                          className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all duration-200 !cursor-pointer ${
+                            isSelected 
+                              ? "bg-[#4A154B] text-white border-[#4A154B] shadow-sm scale-102"
+                              : "bg-white text-[#1A1A1A] border-[#4A154B]/10 hover:border-[#4A154B]/20"
+                          }`}
+                        >
+                          {swatch && (
+                            <span 
+                              className="w-3.5 h-3.5 rounded-full border border-black/10 shadow-inner flex-shrink-0"
+                              style={{ backgroundColor: swatch }}
+                            />
+                          )}
+                          {colorName}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomColor(prev => !prev)}
+                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold border border-dashed transition-all duration-200 !cursor-pointer ${
+                        showCustomColor 
+                          ? "bg-[#4A154B] text-white border-[#4A154B]"
+                          : "bg-white text-[#4A154B] border-[#4A154B]/30 hover:border-[#4A154B]/50 hover:bg-[#4A154B]/5"
+                      }`}
+                    >
+                      + Custom Shade
+                    </button>
+                  </div>
+                  {showCustomColor && (
+                    <input
+                      type="text"
+                      required
+                      value={customColorFamily}
+                      onChange={(e) => setCustomColorFamily(e.target.value)}
+                      placeholder="Type custom color shade..."
+                      className="glass-input mt-2 max-w-md animate-fadeIn"
+                    />
+                  )}
+                </div>
+
+                {/* Saree Spec Metrics */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-[#4A154B]/5">
+                  {/* Saree Length */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                      Saree Length (meters)
+                      {renderRequiredBadge()}
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      step="0.1"
+                      min="1.0"
+                      value={sareeLength}
+                      onChange={(e) => setSareeLength(e.target.value)}
+                      className="glass-input font-bold"
+                    />
+                  </div>
+
+                  {/* Blouse Option */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Blouse Piece Details</label>
+                    <select
+                      value={blouseIncluded ? "included" : "excluded"}
+                      onChange={(e) => setBlouseIncluded(e.target.value === "included")}
+                      className="glass-input bg-white font-bold !cursor-pointer"
+                    >
+                      <option value="included">Yes: Blouse Included</option>
+                      <option value="excluded">No: Saree Drape Only</option>
+                    </select>
+                  </div>
+
+                  {/* Blouse Length */}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Blouse Fabric Length</label>
+                    <input
+                      type="text"
+                      disabled={!blouseIncluded}
+                      value={blouseIncluded ? blouseLength : "N/A"}
+                      onChange={(e) => setBlouseLength(e.target.value)}
+                      className={`glass-input font-bold ${!blouseIncluded ? "bg-[#FAF8F5] text-[#1A1A1A]/30 border-gray-200 !cursor-not-allowed" : ""}`}
+                    />
+                  </div>
+                </div>
+
+                {/* Wash Care Instruction Box */}
+                <div className="flex flex-col gap-2 pt-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Heritage Wash Care &amp; Preservation Instructions</label>
+                  <textarea
+                    rows={2.5}
+                    value={washCare}
+                    onChange={(e) => setWashCare(e.target.value)}
+                    placeholder="Specify preservation rules e.g., Dry clean only. Wrap wrapped inside soft muslin cloth..."
+                    className="glass-input resize-none"
+                  />
+                </div>
+
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: Media Assets & AI Digital Twin Studio */}
+        {step === 2 && (
+          <div className="space-y-6 animate-fadeIn">
+            
+            {/* Cloud Media Assets */}
+            <div className="ui-card p-6 sm:p-8 space-y-6">
+              <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
+                <ImageIcon size={18} className="text-[#D4AF37]" />
+                1. Cloud Saree Media Assets
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Image upload block */}
+                <div className="space-y-4">
+                  <div className="border border-dashed border-[#4A154B]/20 hover:border-[#4A154B]/50 rounded-3xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center min-h-[220px] transition-colors duration-300 !cursor-pointer">
+                    <ImageIcon size={36} className="text-[#4A154B]/40 mb-3" />
+                    <span className="text-xs font-bold text-[#4A154B]">Upload Saree Photographs</span>
+                    <span className="text-[10px] text-[#1A1A1A]/40 mt-1.5 mb-4 leading-relaxed">
+                      <strong>Format:</strong> JPEG, PNG, or WebP (Flat-lay or Mannequin)<br />
+                      <strong>Ratio:</strong> 2:3 or 3:4 Vertical portrait scale<br />
+                      <strong>Size:</strong> Under 5 MB per photo file
+                    </span>
+                    
+                    <input 
+                      type="file" 
+                      multiple
+                      accept="image/*" 
+                      onChange={handleImageUpload} 
+                      className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      disabled={uploadingImage}
+                    />
+                    
+                    {uploadingImage && <div className="text-xs text-[#4A154B] font-bold animate-pulse">Uploading photos...</div>}
+                  </div>
+
+                  {/* Photo Previews */}
+                  {images.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase text-[#1A1A1A]/60 block">Saree Image Gallery ({images.length})</label>
+                      <div className="grid grid-cols-3 gap-3 w-full">
+                        {images.map((img, index) => {
+                          const status = mediaStatuses[img.id]?.status || "ready";
+                          const isSyncing = status === "queued" || status === "processing";
+                          const isFailed = status === "failed";
+                          return (
+                            <div key={img.id || index} className="relative aspect-[2/3] rounded-2xl overflow-hidden border border-[#4A154B]/10 bg-white shadow-sm group">
+                              <img src={img.url} alt={`Uploaded ${index + 1}`} className="object-cover w-full h-full" />
+                              {isSyncing && (
+                                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-2">
+                                  <span className="text-[9px] font-bold text-white uppercase animate-pulse">Syncing...</span>
+                                </div>
+                              )}
+                              {isFailed && (
+                                <div className="absolute inset-0 bg-red-900/80 flex flex-col items-center justify-center text-center p-2 text-white">
+                                  <span className="text-[9px] font-bold uppercase">Failed</span>
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setImages(prev => prev.filter((_, i) => i !== index))}
+                                className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer z-10"
+                                aria-label="Remove image"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Video upload block */}
+                <div className="space-y-4">
+                  <div className="border border-dashed border-[#4A154B]/20 hover:border-[#4A154B]/50 rounded-3xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center min-h-[220px] transition-colors duration-300 !cursor-pointer">
+                    <VideoIcon size={36} className="text-[#D4AF37]/50 mb-3" />
+                    <span className="text-xs font-bold text-[#4A154B]">Upload short video (Optional)</span>
+                    <span className="text-[10px] text-[#1A1A1A]/40 mt-1.5 mb-4 leading-relaxed">
+                      <strong>Format:</strong> Vertical MP4 (Muted loop)<br />
+                      <strong>Length:</strong> 5 to 15 seconds looping<br />
+                      <strong>Exclusive:</strong> Marks Saree as Founder Curation<br />
+                      <strong>Size:</strong> Under 100 MB file limit
+                    </span>
+                    
+                    <input 
+                       type="file" 
+                       accept="video/mp4" 
+                       onChange={handleVideoUpload} 
+                       className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                       disabled={uploadingVideo}
+                    />
+
+                    {uploadingVideo && <div className="text-xs text-[#4A154B] font-bold animate-pulse">Uploading video...</div>}
+                  </div>
+
+                  {/* Video Preview */}
+                  {video && (
+                    <div className="flex flex-col items-center p-3 rounded-2xl bg-white border border-[#4A154B]/10 max-w-[160px] mx-auto relative group">
+                      <div className="relative aspect-[9/16] w-[120px] rounded-xl overflow-hidden bg-[#FAF8F5] shadow-inner">
+                        <video src={video.url} controls muted loop playsInline className="object-cover w-full h-full" />
+                        {(() => {
+                          const status = mediaStatuses[video.id]?.status || "ready";
+                          const isSyncing = status === "queued" || status === "processing";
+                          const isFailed = status === "failed";
+                          if (isSyncing) {
+                            return (
+                              <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-1.5 text-white">
+                                <span className="text-[8px] font-bold uppercase animate-pulse">Syncing...</span>
+                              </div>
+                            );
+                          }
+                          if (isFailed) {
+                            return (
+                              <div className="absolute inset-0 bg-red-955/80 flex flex-col items-center justify-center text-center p-1.5 text-white">
+                                <span className="text-[8px] font-bold uppercase">Failed</span>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVideo(null);
+                            setFoundersExclusive(false);
+                          }}
+                          className="absolute top-1 right-1 bg-red-500 hover:bg-red-700 text-white rounded-full w-4.5 h-4.5 flex items-center justify-center text-[9px] font-bold shadow-md cursor-pointer z-10"
+                          aria-label="Remove video"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <span className="text-[9px] text-green-600 font-bold mt-2">✓ Video Connected</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* AI Digital Twin Studio (Disabled for Customer) */}
+            {false && images.length > 0 && (
+              <div className="border border-[#D4AF37]/35 bg-white/40 backdrop-blur-md rounded-3xl p-6 sm:p-8 space-y-8 shadow-lg animate-slideUp">
+                <div className="flex items-center justify-between border-b border-[#D4AF37]/20 pb-4">
+                  <div className="space-y-1">
+                    <h4 className="font-display font-bold text-base text-[#4A154B] flex items-center gap-1.5">
+                      <Sparkles size={18} className="text-[#D4AF37] animate-pulse" />
+                      AI Digital Twin Studio
+                    </h4>
+                    <p className="text-xs text-[#1A1A1A]/60">Drape your exact handwoven saree onto high-end models automatically.</p>
+                  </div>
+                  <span className="text-[10px] font-bold bg-[#D4AF37]/15 text-[#4A154B] px-3 py-1 rounded-full border border-[#D4AF37]/30 shadow-sm">
+                    gemini-3.1-flash-image enabled
+                  </span>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Avatar Option */}
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A]/70 block">1. Model Avatar Selection</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      {[
+                        { id: "Dusky Indian skin tone", label: "Dusky", sub: "Rich & Radiant", color: "from-[#8C6239] to-[#5C3A21]", border: "border-[#8C6239]/40" },
+                        { id: "Olive Indian skin tone", label: "Olive", sub: "Warm & Elegant", color: "from-[#C49A45] to-[#8C6B23]", border: "border-[#C49A45]/40" },
+                        { id: "Fair Indian skin tone", label: "Fair", sub: "Bright & Classic", color: "from-[#F5D6B5] to-[#D4B28C]", border: "border-[#F5D6B5]/40" }
+                      ].map((tone) => {
+                        const isSelected = modelTone === tone.id;
+                        return (
+                          <button
+                            key={tone.id}
+                            type="button"
+                            onClick={() => setModelTone(tone.id)}
+                            className={`flex items-center gap-3 p-3.5 rounded-2xl border text-left transition-all duration-300 !cursor-pointer ${
+                              isSelected
+                                ? "bg-[#4A154B] border-[#4A154B] text-white shadow-md scale-[1.02]"
+                                : "bg-white/80 border-gray-200 hover:border-[#4A154B]/30 hover:bg-white text-[#1A1A1A]"
+                            }`}
+                          >
+                            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${tone.color} ${tone.border} border shadow-inner flex-shrink-0`} />
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold leading-tight">{tone.label}</div>
+                              <div className={`text-[9px] truncate leading-none mt-0.5 ${isSelected ? "text-white/70" : "text-[#1A1A1A]/40"}`}>{tone.sub}</div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Shoot Vibe / Background */}
+                  <div className="space-y-3">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A]/70 block">2. Shoot Location Vibe</label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                      {[
+                        { id: "royal heritage Indian palace courtyard, sandstone arches, warm natural sunlight", name: "Royal Palace", desc: "Sandstone arches", color: "border-amber-200 bg-amber-50/30 hover:bg-amber-50/60" },
+                        { id: "minimalist modern light-filled studio, terracotta planters, soft shadows", name: "Minimal Studio", desc: "Modern terracotta", color: "border-orange-200 bg-orange-50/30 hover:bg-orange-50/60" },
+                        { id: "sunlit outdoor lush green garden with white bougainvillea archways", name: "Lush Garden", desc: "Bougainvillea arches", color: "border-emerald-200 bg-emerald-50/30 hover:bg-emerald-50/60" },
+                        { id: "luxury indoor minimalist living space, aesthetic wooden panels, warm spotlighting", name: "Luxury Loft", desc: "Warm spotlights", color: "border-stone-200 bg-stone-50/30 hover:bg-stone-50/60" }
+                      ].map((vibe) => {
+                        const isSelected = backgroundVibe === vibe.id;
+                        return (
+                          <button
+                            key={vibe.id}
+                            type="button"
+                            onClick={() => setBackgroundVibe(vibe.id)}
+                            className={`flex flex-col p-4 rounded-2xl border text-left transition-all duration-300 !cursor-pointer ${
+                              isSelected
+                                ? "bg-[#4A154B] border-[#4A154B] text-white shadow-md scale-[1.02]"
+                                : `bg-white/80 border-gray-200 ${vibe.color} text-[#1A1A1A]`
+                            }`}
+                          >
+                            <span className="text-xs font-bold leading-tight">{vibe.name}</span>
+                            <span className={`text-[9px] mt-1 ${isSelected ? "text-white/70" : "text-[#1A1A1A]/50"}`}>{vibe.desc}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Number of Generations & Multi-Pose Selection Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2 border-t border-[#D4AF37]/15">
+                    {/* Count Selector */}
+                    <div className="space-y-3 flex flex-col justify-start">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A]/70 block">
+                        3. Number of Shoots
+                      </label>
+                      <div className="flex gap-1.5 p-1 bg-white/60 border border-gray-200 rounded-2xl w-full max-w-[240px]">
+                        {[1, 2, 3, 4].map((num) => {
+                          const isSelected = generationCount === num;
+                          return (
+                            <button
+                              key={num}
+                              type="button"
+                              onClick={() => handleGenerationCountChange(num)}
+                              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all duration-300 !cursor-pointer ${
+                                isSelected
+                                  ? "bg-[#4A154B] text-white shadow-sm"
+                                  : "hover:bg-white text-[#1A1A1A]/60"
+                              }`}
+                            >
+                              {num}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <span className="text-[10px] text-[#1A1A1A]/40 leading-relaxed block">
+                        Choose up to 4 distinct angles to generate concurrently.
+                      </span>
+                    </div>
+
+                    {/* Pose Choices Grid */}
+                    <div className="space-y-3 md:col-span-2">
+                      <label className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A]/70 flex items-center justify-between">
+                        <span>4. Select Model Pose Angles</span>
+                        <span className="text-[10px] text-green-600 font-bold bg-green-50 px-2 py-0.5 rounded-md border border-green-200/50">
+                          Selected: {selectedPoses.length} / {generationCount}
+                        </span>
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {[
+                          { id: "Front Pleats Detail", name: "Front Pleats Detail", desc: "Drape folds & border details" },
+                          { id: "Back View Drape", name: "Back View Drape", desc: "Silhouette, pleating & overall fall" },
+                          { id: "Pallu Fall Close-up", name: "Pallu Fall Close-up", desc: "Main artwork & motifs showcase" },
+                          { id: "Macro Fabric Detail", name: "Macro Fabric Detail", desc: "Close-up weave textures & sparkle" }
+                        ].map((pose) => {
+                          const isSelected = selectedPoses.includes(pose.id);
+                          return (
+                            <button
+                              key={pose.id}
+                              type="button"
+                              onClick={() => togglePose(pose.id)}
+                              className={`flex items-center gap-3 p-3 rounded-2xl border text-left transition-all duration-300 !cursor-pointer ${
+                                isSelected
+                                  ? "bg-[#4A154B]/5 border-[#4A154B] text-[#4A154B] ring-2 ring-[#4A154B]/10 shadow-sm"
+                                  : "bg-white/80 border-gray-200 hover:border-gray-300 text-[#1A1A1A]"
+                              }`}
+                            >
+                              <div className={`w-4 h-4 rounded-md border flex items-center justify-center flex-shrink-0 ${
+                                isSelected ? "bg-[#4A154B] border-[#4A154B] text-white" : "border-gray-300 bg-white"
+                              }`}>
+                                {isSelected && <span className="text-[10px] leading-none">✓</span>}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="text-[11px] font-bold truncate leading-tight">{pose.name}</div>
+                                <div className="text-[9px] text-[#1A1A1A]/40 truncate leading-none mt-0.5">{pose.desc}</div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Saree Weave prompt overrides */}
+                  <div className="flex flex-col gap-2 pt-2 border-t border-[#D4AF37]/15">
+                    <label className="text-xs font-bold uppercase tracking-wider text-[#1A1A1A]/70 flex items-center justify-between">
+                      <span>5. Customize Fabric Prompt (Optional)</span>
+                      <span className="text-[10px] text-[#1A1A1A]/40 font-normal lowercase italic">We automatically analyze and fill this if left empty</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={customAiPrompt}
+                      onChange={(e) => setCustomAiPrompt(e.target.value)}
+                      placeholder="e.g. A gorgeous red silk saree with gold zardozi scalloped borders and intricate floral jaal print..."
+                      className="glass-input text-xs"
+                    />
+                  </div>
+
+                  {/* Display sync settings */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center bg-white/40 border border-[#D4AF37]/15 p-4 rounded-2xl">
+                    <div className="md:col-span-2 space-y-1">
+                      <label className="text-xs font-bold text-[#4A154B] uppercase tracking-wide block">6. Storefront Display Filter</label>
+                      <span className="text-[10px] text-[#1A1A1A]/50 block">Filter out raw flat photos automatically in Shopify if you only want models visible.</span>
+                    </div>
+                    
+                    <select
+                      value={displayMode}
+                      onChange={(e) => setDisplayMode(e.target.value as any)}
+                      className="glass-input bg-white text-xs font-bold !cursor-pointer"
+                    >
+                      <option value="both">Show Both: Raw + Model</option>
+                      <option value="model_only">AI Model ONLY (Hide Raw)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* AI trigger */}
+                <div className="flex justify-end pt-2">
+                  <button
+                    type="button"
+                    disabled={aiLoading}
+                    onClick={handleAiGeneration}
+                    className={`btn-primary py-3 px-8 text-xs uppercase tracking-wider font-bold shadow-md bg-[#4A154B] border-[#4A154B] hover:bg-[#4A154B]/90 flex items-center gap-2 ${
+                      aiLoading ? "opacity-50 !cursor-not-allowed" : "!cursor-pointer"
+                    }`}
+                  >
+                    {aiLoading ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Generating Twin Shoot ({selectedPoses.length} Poses)...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles size={14} className="text-[#D4AF37] animate-pulse" />
+                        Run AI Model Shoot
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Back / Next Buttons */}
+            <div className="flex justify-between pt-4">
+              <button
+                type="button"
+                onClick={() => setStep(1)}
+                className="btn-secondary py-3 px-6 text-xs uppercase tracking-wider font-bold flex items-center gap-2 !cursor-pointer"
+              >
+                <ArrowLeft size={14} />
+                Back: Saree Story
+              </button>
+              <button
+                type="button"
+                onClick={() => setStep(3)}
+                disabled={!isStep2Valid}
+                className={`btn-primary py-3 px-8 text-xs uppercase tracking-wider font-bold flex items-center gap-2 shadow-md transition-all duration-300 ${
+                  !isStep2Valid 
+                    ? "opacity-45 bg-[#FAF8F5] text-[#1A1A1A]/40 border-gray-300 shadow-none !cursor-not-allowed" 
+                    : "!cursor-pointer"
+                }`}
+              >
+                Next: Pricing &amp; Curation
+                <ArrowRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 3: Pricing, Stock & Curation Options */}
+        {step === 3 && (
+          <div className="space-y-6 animate-fadeIn">
+            
+            {/* Connected Saree Media Assets Quick-Summary bar */}
+            {(images.length > 0 || video) && (
+              <div className="border border-[#4A154B]/10 bg-white/60 backdrop-blur-md rounded-3xl p-5 sm:p-6 space-y-3.5 shadow-sm animate-fadeIn">
+                <div className="flex items-center justify-between border-b border-[#4A154B]/5 pb-2.5">
+                  <div className="space-y-0.5">
+                    <h4 className="font-display font-bold text-xs text-[#4A154B] flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-[#D4AF37]" />
+                      Connected Media Assets Checklist
+                    </h4>
+                    <p className="text-[10px] text-[#1A1A1A]/50">Verify photos and videos mapped to this Shopify listing before publishing.</p>
+                  </div>
+                  <span className="text-[9px] font-bold bg-[#4A154B]/5 text-[#4A154B] px-2 py-0.5 rounded-md border border-[#4A154B]/10">
+                    {images.length} Photos {video ? "+ 1 Video" : ""}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3.5 overflow-x-auto pb-1.5 scrollbar-thin scrollbar-thumb-[#4A154B]/10 scrollbar-track-transparent">
+                  {/* Images */}
+                  {images.map((img, index) => {
+                    const isAi = img.id.startsWith("media_ai_");
+                    const status = mediaStatuses[img.id]?.status || "ready";
+                    const isSyncing = status === "queued" || status === "processing";
+                    return (
+                      <div key={img.id || index} className="relative aspect-[2/3] w-20 rounded-xl overflow-hidden border border-[#4A154B]/10 bg-white flex-shrink-0 shadow-sm group">
+                        <img src={img.url} alt={`Preview ${index + 1}`} className="object-cover w-full h-full" />
+                        {isAi && (
+                          <span className="absolute bottom-1 left-1 right-1 text-[8px] font-bold text-center bg-[#4A154B] text-[#D4AF37] px-1 py-0.5 rounded shadow-sm border border-[#D4AF37]/20 uppercase">
+                            AI Twin
+                          </span>
+                        )}
+                        {isSyncing && (
+                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-center">
+                            <span className="text-[8px] font-bold text-white uppercase animate-pulse">Sync...</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+
+                  {/* Video */}
+                  {video && (
+                    <div className="relative aspect-[9/16] w-[56px] rounded-xl overflow-hidden bg-[#FAF8F5] border border-[#4A154B]/10 flex-shrink-0 shadow-sm">
+                      <video src={video.url} muted loop playsInline className="object-cover w-full h-full" />
+                      <span className="absolute bottom-1 left-1 right-1 text-[8px] font-bold text-center bg-[#D4AF37] text-[#4A154B] px-1 py-0.5 rounded shadow-sm uppercase leading-none">
+                        Video
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Financials & Stock card */}
+            <div className="ui-card p-6 sm:p-8 space-y-6">
+              <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
+                <DollarSign size={18} className="text-[#D4AF37]" />
+                1. Financial Pricing &amp; Stock levels
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+                {/* Retail Price */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Selling Price (INR)
+                    {renderRequiredBadge()}
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-xs font-bold text-[#1A1A1A]/50">₹</span>
+                    <input
+                      type="number"
+                      required
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      placeholder="18000"
+                      className="glass-input pl-6 w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Compare-at Price */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Compare-at Price (INR)</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-xs font-bold text-[#1A1A1A]/50">₹</span>
+                    <input
+                      type="number"
+                      value={compareAtPrice}
+                      onChange={(e) => setCompareAtPrice(e.target.value)}
+                      placeholder="25000"
+                      className="glass-input pl-6 w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Cost Price */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Private Cost Price</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-3 text-[#1A1A1A]/50 text-xs font-bold">₹</span>
+                    <input
+                      type="number"
+                      value={costPrice}
+                      onChange={(e) => setCostPrice(e.target.value)}
+                      placeholder="10000"
+                      className="glass-input pl-6 w-full"
+                    />
+                  </div>
+                </div>
+
+                {/* Stock Level */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center">
+                    Stock level count
+                    {renderRequiredBadge()}
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    value={stock}
+                    onChange={(e) => setStock(e.target.value)}
+                    placeholder="1"
+                    className="glass-input text-center font-bold"
+                  />
+                </div>
+
+                {/* Margin Feedback */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-bold uppercase text-[#1A1A1A]/70 flex items-center gap-1">
+                    <Percent size={12} />
+                    Markup Margin
+                  </label>
+                  <div className={`rounded-xl border p-2.5 text-center font-bold text-xs ${getMarginColor()}`}>
+                    {priceVal > 0 ? `${profitMargin.toFixed(0)}% Margin` : "Specify Prices"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Curation Tags & Labels */}
+            <div className="ui-card p-6 sm:p-8 space-y-6">
+              <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
+                <Tag size={18} className="text-[#D4AF37]" />
+                2. Curation Tags &amp; Storefront Tags
+              </h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Add Tags */}
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Add Custom Tags (Max 3)</label>
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={newTag} 
+                        onChange={(e) => setNewTag(e.target.value)} 
+                        placeholder="e.g. Zari Border"
+                        className="glass-input flex-grow text-xs" 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={addTag}
+                        className="btn-secondary py-2 px-4 flex items-center justify-center !cursor-pointer"
                       >
-                        ×
+                        <Plus size={16} />
                       </button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                  </div>
 
-          {/* Video upload */}
-          <div>
-            <div className="border border-dashed border-[#4A154B]/15 rounded-2xl p-6 flex flex-col items-center justify-center bg-[#FAF8F5]/30 relative text-center min-h-[220px]">
-              <VideoIcon size={32} className="text-[#D4AF37]/60 mb-3" />
-              <span className="text-xs font-bold text-[#4A154B]">Upload Short Video (Optional)</span>
-              <span className="text-[10px] text-[#1A1A1A]/40 mt-1 mb-4 leading-relaxed">
-                <strong>Format:</strong> MP4 (H.264 codec)<br />
-                <strong>Length:</strong> 5 - 15 seconds (Muted/No audio)<br />
-                <strong>Aspect Ratio:</strong> Vertical 9:16 or 2:3 (e.g., 1080 x 1920 px)<br />
-                <strong>File Size:</strong> Under 100 MB (expanded)
-              </span>
-              <input 
-                type="file" 
-                accept="video/mp4" 
-                onChange={handleVideoUpload} 
-                className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                disabled={uploadingVideo}
-              />
-              {uploadingVideo && <div className="text-xs text-[#4A154B] font-semibold animate-pulse mt-2">Uploading Looping Video...</div>}
+                  {existingTags.length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-bold uppercase text-[#1A1A1A]/50 block">Quick Suggestions</label>
+                      <div className="flex flex-wrap gap-2">
+                        {existingTags.map(tagSuggestion => (
+                          <button
+                            key={tagSuggestion}
+                            type="button"
+                            onClick={() => {
+                              if (tags.length >= 3) {
+                                alert("❌ You can add a maximum of 3 tags to a particular Saree.");
+                                return;
+                              }
+                              if (!tags.includes(tagSuggestion)) {
+                                setTags([...tags, tagSuggestion]);
+                              }
+                            }}
+                            className="bg-[#4A154B]/5 hover:bg-[#4A154B]/10 border border-[#4A154B]/10 rounded-full px-2.5 py-0.5 text-[10px] text-[#4A154B] font-semibold transition cursor-pointer"
+                          >
+                            + {tagSuggestion}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {tags.length > 0 && (
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold uppercase text-[#1A1A1A]/60 block">Active Tags Mapped</label>
+                      <div className="flex flex-wrap gap-2">
+                        {tags.map(t => (
+                          <span key={t} className="flex items-center gap-1.5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-full px-2.5 py-1 text-[11px] font-semibold text-[#4A154B]">
+                            {t}
+                            <button type="button" onClick={() => removeTag(t)} className="text-red-500 hover:text-red-700 font-bold focus:outline-none">×</button>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Founder curation & Costs */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4 bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-4 rounded-xl">
+                    <input
+                      type="checkbox"
+                      id="foundersExclusive"
+                      disabled={!video}
+                      checked={foundersExclusive}
+                      onChange={(e) => setFoundersExclusive(e.target.checked)}
+                      className="w-5 h-5 accent-[#4A154B] rounded cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                    />
+                    <div>
+                      <label htmlFor="foundersExclusive" className="text-sm font-bold text-[#4A154B] cursor-pointer flex items-center gap-1">
+                        Mark as "Founder's Exclusive" Curation {!video && <span className="text-[10px] text-red-500 font-normal ml-2">(Requires Video Upload)</span>}
+                      </label>
+                      <p className="text-xs text-[#1A1A1A]/60 mt-0.5">
+                        Adds the `Founders-Exclusive` tag and places this saree in your curation rows.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Private Admin Notes (Redis Only)</label>
+                    <textarea
+                      rows={2.5}
+                      value={privateNotes}
+                      onChange={(e) => setPrivateNotes(e.target.value)}
+                      placeholder="Enter private notes on inventory origins, dry-clean agreements, or designer margins..."
+                      className="glass-input resize-none"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Video preview */}
-            {video && (
-              <div className="mt-4 flex flex-col items-center">
-                <div className="relative aspect-[9/16] w-[140px] rounded-lg overflow-hidden border border-[#4A154B]/10 bg-[#FAF8F5] shadow-sm">
-                  <video src={video.url} controls muted loop playsInline className="object-cover w-full h-full" />
-                  {(() => {
-                    const status = mediaStatuses[video.id]?.status || "ready";
-                    const isSyncing = status === "queued" || status === "processing";
-                    const isFailed = status === "failed";
-                    if (isSyncing) {
-                      return (
-                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-2">
-                          <span className="text-[11px] font-bold text-white uppercase animate-pulse">Worker Syncing...</span>
-                          <span className="text-[10px] text-white/80 mt-0.5">{status === "queued" ? "Queued in Redis" : "Optimizing Bitrates"}</span>
-                        </div>
-                      );
-                    }
-                    if (isFailed) {
-                      return (
-                        <div className="absolute inset-0 bg-red-955/80 flex flex-col items-center justify-center text-center p-2 text-white">
-                          <span className="text-[11px] font-bold uppercase">Sync Failed</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setVideo(null);
-                      setFoundersExclusive(false);
-                    }}
-                    className="absolute top-1.5 right-1.5 bg-red-500 hover:bg-red-700 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold shadow-md cursor-pointer z-10"
-                    aria-label="Remove video"
-                  >
-                    ×
-                  </button>
+            {/* Bottom Save Saree Details Trigger Bar */}
+            <div className="flex flex-col items-end gap-3 p-4 bg-white/50 border border-[#4A154B]/10 rounded-2xl backdrop-blur-md">
+              {isMediaSyncing && (
+                <div className="bg-[#fffbeb] border border-[#f59e0b]/30 text-[#92400e] text-xs p-3.5 rounded-xl flex items-center gap-2 animate-pulse w-full justify-center">
+                  <span className="text-sm">⚠️</span>
+                  <span>
+                    <strong>Media Worker:</strong> Optimizing and syncing high-definition video/image assets to Shopify CDN. Please wait for completion before saving to prevent broken media links.
+                  </span>
                 </div>
-                <div className="text-[11px] text-green-600 font-semibold mt-2 flex items-center gap-1">
-                  ✓ Looping Video Attached Successfully!
-                </div>
+              )}
+              <div className="flex justify-between items-center w-full">
+                <button
+                  type="button"
+                  onClick={() => setStep(2)}
+                  className="btn-secondary py-3 px-6 text-xs uppercase tracking-wider font-bold flex items-center gap-2 !cursor-pointer"
+                >
+                  <ArrowLeft size={14} />
+                  Back: Media twins
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading || uploadingImage || uploadingVideo || isMediaSyncing || !isStep3Valid}
+                  className={`btn-primary py-3 px-8 text-xs uppercase tracking-wider font-bold shadow-md transition-all ${
+                    (!isStep3Valid || loading || uploadingImage || uploadingVideo || isMediaSyncing)
+                      ? "opacity-45 bg-[#FAF8F5] text-[#1A1A1A]/40 border-gray-300 shadow-none !cursor-not-allowed" 
+                      : "!cursor-pointer"
+                  }`}
+                >
+                  {loading ? "Publishing Saree..." : 
+                   uploadingImage ? "Uploading Photo..." :
+                   uploadingVideo ? "Uploading Video..." :
+                   isMediaSyncing ? "Worker Syncing Media..." : "Save Product Details"}
+                </button>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Founder curation & Costs */}
-      <div className="ui-card p-6 sm:p-8 space-y-6">
-        <h3 className="font-display font-bold text-base text-[#4A154B] border-b border-[#4A154B]/5 pb-3 flex items-center gap-2">
-          <Sparkles size={16} className="text-[#D4AF37]" />
-          Founder curation options
-        </h3>
-
-        <div className="flex items-center gap-4 bg-[#D4AF37]/5 border border-[#D4AF37]/20 p-4 rounded-xl">
-          <input
-            type="checkbox"
-            id="foundersExclusive"
-            disabled={!video}
-            checked={foundersExclusive}
-            onChange={(e) => setFoundersExclusive(e.target.checked)}
-            className="w-5 h-5 accent-[#4A154B] rounded cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-          />
-          <div>
-            <label htmlFor="foundersExclusive" className="text-sm font-bold text-[#4A154B] cursor-pointer flex items-center gap-1">
-              Mark as "Founder's Exclusive" Curation {!video && <span className="text-[10px] text-red-500 font-normal ml-2">(Requires Video Upload)</span>}
-            </label>
-            <p className="text-xs text-[#1A1A1A]/60 mt-0.5">
-              Adds the `Founders-Exclusive` tag and places this saree in your curation rows.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-bold uppercase text-[#1A1A1A]/70">Private Admin Notes (Redis Only)</label>
-          <textarea
-            rows={2}
-            value={privateNotes}
-            onChange={(e) => setPrivateNotes(e.target.value)}
-            className="glass-input resize-none"
-          />
-        </div>
-      </div>
-
-      <div className="flex flex-col items-end gap-3 p-4 w-full">
-        {isMediaSyncing && (
-          <div className="bg-[#fffbeb] border border-[#f59e0b]/30 text-[#92400e] text-xs p-3.5 rounded-xl flex items-center gap-2 animate-pulse w-full justify-center">
-            <span className="text-sm">⚠️</span>
-            <span>
-              <strong>Media Worker:</strong> Optimizing and syncing high-definition video/image assets to Shopify CDN. Please wait for completion before saving to prevent broken media links.
-            </span>
+            </div>
           </div>
         )}
-        <button
-          type="submit"
-          disabled={loading || uploadingImage || uploadingVideo || isMediaSyncing}
-          className={`btn-primary py-3 px-8 text-xs uppercase tracking-wider font-semibold shadow-md ${(loading || uploadingImage || uploadingVideo || isMediaSyncing) ? "opacity-60 cursor-not-allowed" : ""}`}
-        >
-          {loading ? "Saving Saree details..." : 
-           uploadingImage ? "Uploading Photo..." :
-           uploadingVideo ? "Uploading Looping Video..." :
-           isMediaSyncing ? "Worker Syncing Media..." : "Save Product"}
-        </button>
-      </div>
 
-    </form>
+      </form>
+    </div>
   );
 }

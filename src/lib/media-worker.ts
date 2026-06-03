@@ -53,68 +53,99 @@ async function pollShopifyFileUrl(fileId: string, maxAttempts = 12): Promise<str
 export async function processQueueAsync() {
   // Trigger asynchronously in non-blocking fashion
   (async () => {
+    const loopLockKey = "lock:media:loop";
     try {
-      const queue = await db.hgetall("media:queue");
-      if (!queue) return;
+      const loopAcquired = await db.set(loopLockKey, "running", { nx: true, ex: 30 });
+      if (!loopAcquired) {
+        console.log("[Media Worker] Global queue loop is already active. Skipping duplicate run.");
+        return;
+      }
 
-      const items = Object.values(queue).map((val: any) => 
-        typeof val === "string" ? JSON.parse(val) : val
-      );
+      try {
+        const queue = await db.hgetall("media:queue");
+        if (!queue) return;
 
-      // Filter for items that are queued
-      const queuedItems = items.filter(item => item && item.status === "queued");
+        const items = Object.values(queue).map((val: any) => 
+          typeof val === "string" ? JSON.parse(val) : val
+        );
 
-      for (const item of queuedItems) {
-        // Mark as processing to avoid duplicate runs
-        const processingItem = { ...item, status: "processing", startedAt: new Date().toISOString() };
-        await db.hset("media:queue", { [item.id]: JSON.stringify(processingItem) });
+        // Filter for items that are queued
+        const queuedItems = items.filter(item => item && item.status === "queued");
 
-        const absoluteRawPath = item.path;
-        const rawExt = path.extname(absoluteRawPath).toLowerCase() || (item.type === "image" ? ".jpg" : ".mp4");
-        // Output extension: optimize to .jpg for images, .mp4 for videos
-        let ext = item.type === "image" ? ".jpg" : ".mp4";
-        const dir = path.dirname(absoluteRawPath);
-        const filename = path.basename(absoluteRawPath);
-        
-        let optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
-        let absoluteOptimizedPath = path.join(dir, optimizedFilename);
-        let isFallbackCopy = false;
+        for (const item of queuedItems) {
+          // Atomic lock check: Set a Redis key lock:media:${item.id} to avoid duplicate processing
+          const lockKey = `lock:media:${item.id}`;
+          const acquired = await db.set(lockKey, "processing", { nx: true, ex: 120 });
+          if (!acquired) {
+            console.log(`[Media Worker] Item ${item.id} is already locked by another thread. Skipping.`);
+            continue;
+          }
 
-        try {
-          console.log(`[Media Worker] Optimizing queued item ${item.id} (${item.type})...`);
+          // Mark as processing to avoid duplicate runs
+          const processingItem = { ...item, status: "processing", startedAt: new Date().toISOString() };
+          await db.hset("media:queue", { [item.id]: JSON.stringify(processingItem) });
 
-          if (item.type === "image") {
-            try {
-              // 1. Image Optimization: Resize to max 2400px wide, preserve original aspect ratio (NO cropping)
-              await sharp(absoluteRawPath)
-                .resize(2400, undefined, {
-                  fit: "inside",        // shrink to fit within bounds, never crop
-                  withoutEnlargement: true, // don't upscale smaller images
-                })
-                .jpeg({ quality: 88, progressive: true })
-                .toFile(absoluteOptimizedPath);
-            } catch (sharpErr) {
-              console.warn("[Media Worker] Sharp optimization failed, falling back to direct copy", sharpErr);
-              ext = rawExt; // Use raw file extension
-              optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
-              absoluteOptimizedPath = path.join(dir, optimizedFilename);
-              await fs.copyFile(absoluteRawPath, absoluteOptimizedPath);
-              isFallbackCopy = true;
+          const absoluteRawPath = item.path;
+
+          // Ensure source file exists on local disk before processing
+          try {
+            await fs.access(absoluteRawPath);
+          } catch {
+            console.warn(`[Media Worker] Source file missing on disk: ${absoluteRawPath}. Checking Redis fallback...`);
+            const base64Key = `brand-image-data:${item.id}`;
+            const redisData = await redis.get<string>(base64Key);
+            if (redisData && redisData.includes("base64,")) {
+              console.log(`[Media Worker] Found base64 backup in Redis for ${item.id}. Re-creating local temp file...`);
+              const base64Data = redisData.split("base64,")[1];
+              await fs.mkdir(path.dirname(absoluteRawPath), { recursive: true });
+              await fs.writeFile(absoluteRawPath, Buffer.from(base64Data, "base64"));
+            } else {
+              console.error(`[Media Worker] No file or Redis backup found for ${item.id}. Failing item.`);
+              const failedItem = {
+                ...item,
+                status: "failed",
+                error: "Source file not found on disk or backup",
+                failedAt: new Date().toISOString()
+              };
+              await db.hset("media:queue", { [item.id]: JSON.stringify(failedItem) });
+              continue;
             }
+          }
 
-          } else {
-            // 2. Video Optimization: Strip audio, scale height to 1280px vertical, compress bitrates
-            try {
-              let ffmpegPath = "ffmpeg";
+          const rawExt = path.extname(absoluteRawPath).toLowerCase() || (item.type === "image" ? ".jpg" : ".mp4");
+          // Output extension: optimize to .jpg for images, .mp4 for videos
+          let ext = item.type === "image" ? ".jpg" : ".mp4";
+          const dir = path.dirname(absoluteRawPath);
+          const filename = path.basename(absoluteRawPath);
+          
+          let optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
+          let absoluteOptimizedPath = path.join(dir, optimizedFilename);
+          let isFallbackCopy = false;
+
+          try {
+            console.log(`[Media Worker] Optimizing queued item ${item.id} (${item.type})...`);
+
+            if (item.type === "image") {
               try {
-                await execPromise("which ffmpeg");
-              } catch {
-                ffmpegPath = "/opt/homebrew/bin/ffmpeg";
+                // 1. Image Optimization: Resize to max 2400px wide, preserve original aspect ratio (NO cropping)
+                await sharp(absoluteRawPath)
+                  .resize(2400, undefined, {
+                    fit: "inside",        // shrink to fit within bounds, never crop
+                    withoutEnlargement: true, // don't upscale smaller images
+                  })
+                  .jpeg({ quality: 88, progressive: true })
+                  .toFile(absoluteOptimizedPath);
+              } catch (sharpErr) {
+                console.warn("[Media Worker] Sharp optimization failed, falling back to direct copy", sharpErr);
+                ext = rawExt; // Use raw file extension
+                optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
+                absoluteOptimizedPath = path.join(dir, optimizedFilename);
+                await fs.copyFile(absoluteRawPath, absoluteOptimizedPath);
+                isFallbackCopy = true;
               }
-              const ffmpegCmd = `${ffmpegPath} -y -i "${absoluteRawPath}" -an -vf "scale=-2:1280" -vcodec libx264 -crf 26 -preset fast "${absoluteOptimizedPath}"`;
-              await execPromise(ffmpegCmd);
-            } catch (ffmpegErr) {
-              console.warn("[Media Worker] FFmpeg full scale failed, fallback to copy...", ffmpegErr);
+
+            } else {
+              // 2. Video Optimization: Strip audio, scale height to 1280px vertical, compress bitrates
               try {
                 let ffmpegPath = "ffmpeg";
                 try {
@@ -122,87 +153,101 @@ export async function processQueueAsync() {
                 } catch {
                   ffmpegPath = "/opt/homebrew/bin/ffmpeg";
                 }
-                const fallbackCmd = `${ffmpegPath} -y -i "${absoluteRawPath}" -an -vcodec copy "${absoluteOptimizedPath}"`;
-                await execPromise(fallbackCmd);
-              } catch (fallbackErr) {
-                console.warn("[Media Worker] FFmpeg fallback command failed, performing direct file copy...", fallbackErr);
-                ext = rawExt; // Use raw file extension
-                optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
-                absoluteOptimizedPath = path.join(dir, optimizedFilename);
-                await fs.copyFile(absoluteRawPath, absoluteOptimizedPath);
-                isFallbackCopy = true;
+                const ffmpegCmd = `${ffmpegPath} -y -i "${absoluteRawPath}" -an -vf "scale=-2:1280" -vcodec libx264 -crf 26 -preset fast "${absoluteOptimizedPath}"`;
+                await execPromise(ffmpegCmd);
+              } catch (ffmpegErr) {
+                console.warn("[Media Worker] FFmpeg full scale failed, fallback to copy...", ffmpegErr);
+                try {
+                  let ffmpegPath = "ffmpeg";
+                  try {
+                    await execPromise("which ffmpeg");
+                  } catch {
+                    ffmpegPath = "/opt/homebrew/bin/ffmpeg";
+                  }
+                  const fallbackCmd = `${ffmpegPath} -y -i "${absoluteRawPath}" -an -vcodec copy "${absoluteOptimizedPath}"`;
+                  await execPromise(fallbackCmd);
+                } catch (fallbackErr) {
+                  console.warn("[Media Worker] FFmpeg fallback command failed, performing direct file copy...", fallbackErr);
+                  ext = rawExt; // Use raw file extension
+                  optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
+                  absoluteOptimizedPath = path.join(dir, optimizedFilename);
+                  await fs.copyFile(absoluteRawPath, absoluteOptimizedPath);
+                  isFallbackCopy = true;
+                }
               }
             }
-          }
 
-          // 3. Upload Optimized file to Shopify Files (registered via fileCreate)
-          const fileBuffer = await fs.readFile(absoluteOptimizedPath);
-          const fileName = `${item.id}${ext}`;
-          
-          let mimeType = item.type === "image" ? "image/jpeg" : "video/mp4";
-          if (isFallbackCopy) {
-            if (ext === ".png") mimeType = "image/png";
-            else if (ext === ".gif") mimeType = "image/gif";
-            else if (ext === ".webp") mimeType = "image/webp";
-            else if (ext === ".mov") mimeType = "video/quicktime";
-            else if (ext === ".webm") mimeType = "video/webm";
-          }
-
-          console.log(`[Media Worker] Uploading optimized ${fileName} to Shopify...`);
-          const result = await shopifySaree.uploadMedia(fileName, mimeType, fileBuffer);
-
-          // Poll for permanent CDN URL (staged-upload URLs are temporary and get deleted)
-          let permanentUrl = result.url;
-          if (result.url.includes("staged-uploads") || !result.url.includes("cdn.shopify.com/files")) {
-            console.log(`[Media Worker] Staged URL detected for ${item.id}, polling for permanent CDN URL...`);
-            const polledUrl = await pollShopifyFileUrl(result.id);
-            if (polledUrl) {
-              permanentUrl = polledUrl;
-              console.log(`[Media Worker] Permanent URL obtained: ${permanentUrl}`);
-            } else {
-              console.warn(`[Media Worker] Could not get permanent URL for ${item.id}, will store base64 fallback`);
+            // 3. Upload Optimized file to Shopify Files (registered via fileCreate)
+            const fileBuffer = await fs.readFile(absoluteOptimizedPath);
+            const fileName = `${item.id}${ext}`;
+            
+            let mimeType = item.type === "image" ? "image/jpeg" : "video/mp4";
+            if (isFallbackCopy) {
+              if (ext === ".png") mimeType = "image/png";
+              else if (ext === ".gif") mimeType = "image/gif";
+              else if (ext === ".webp") mimeType = "image/webp";
+              else if (ext === ".mov") mimeType = "video/quicktime";
+              else if (ext === ".webm") mimeType = "video/webm";
             }
+
+            console.log(`[Media Worker] Uploading optimized ${fileName} to Shopify...`);
+            const result = await shopifySaree.uploadMedia(fileName, mimeType, fileBuffer);
+
+            // Poll for permanent CDN URL (staged-upload URLs are temporary and get deleted)
+            let permanentUrl = result.url;
+            if (result.url.includes("staged-uploads") || !result.url.includes("cdn.shopify.com/files")) {
+              console.log(`[Media Worker] Staged URL detected for ${item.id}, polling for permanent CDN URL...`);
+              const polledUrl = await pollShopifyFileUrl(result.id);
+              if (polledUrl) {
+                permanentUrl = polledUrl;
+                console.log(`[Media Worker] Permanent URL obtained: ${permanentUrl}`);
+              } else {
+                console.warn(`[Media Worker] Could not get permanent URL for ${item.id}, will store base64 fallback`);
+              }
+            }
+
+            // Store base64 copy in Redis as permanent fallback (immune to CDN URL expiry)
+            if (item.type === "image") {
+              const base64Data = fileBuffer.toString("base64");
+              const base64Key = `brand-image-data:${item.id}`;
+              await redis.set(base64Key, `data:${mimeType};base64,${base64Data}`, { ex: 365 * 24 * 3600 });
+              console.log(`[Media Worker] Base64 fallback stored in Redis under ${base64Key}`);
+            }
+
+            // 4. Mark status as completed with permanent URL
+            const completedItem = {
+              ...item,
+              status: "completed",
+              shopifyId: result.id,
+              shopifyUrl: permanentUrl,
+              base64Key: item.type === "image" ? `brand-image-data:${item.id}` : undefined,
+              optimizedPath: absoluteOptimizedPath,
+              completedAt: new Date().toISOString()
+            };
+            await db.hset("media:queue", { [item.id]: JSON.stringify(completedItem) });
+            console.log(`[Media Worker] Item ${item.id} successfully synced to Shopify!`);
+
+            // 5. Clean up temporary files on local disk
+            try {
+              await fs.unlink(absoluteRawPath);
+              await fs.unlink(absoluteOptimizedPath);
+            } catch (unlinkErr) {
+              console.error("[Media Worker] Disk cleanup warning:", unlinkErr);
+            }
+
+          } catch (err: any) {
+            console.error(`[Media Worker] Process failed for item ${item.id}:`, err);
+            const failedItem = {
+              ...item,
+              status: "failed",
+              error: err.message || "Transformation failed",
+              failedAt: new Date().toISOString()
+            };
+            await db.hset("media:queue", { [item.id]: JSON.stringify(failedItem) });
           }
-
-          // Store base64 copy in Redis as permanent fallback (immune to CDN URL expiry)
-          if (item.type === "image") {
-            const base64Data = fileBuffer.toString("base64");
-            const base64Key = `brand-image-data:${item.id}`;
-            await redis.set(base64Key, `data:${mimeType};base64,${base64Data}`, { ex: 365 * 24 * 3600 });
-            console.log(`[Media Worker] Base64 fallback stored in Redis under ${base64Key}`);
-          }
-
-          // 4. Mark status as completed with permanent URL
-          const completedItem = {
-            ...item,
-            status: "completed",
-            shopifyId: result.id,
-            shopifyUrl: permanentUrl,
-            base64Key: item.type === "image" ? `brand-image-data:${item.id}` : undefined,
-            optimizedPath: absoluteOptimizedPath,
-            completedAt: new Date().toISOString()
-          };
-          await db.hset("media:queue", { [item.id]: JSON.stringify(completedItem) });
-          console.log(`[Media Worker] Item ${item.id} successfully synced to Shopify!`);
-
-          // 5. Clean up temporary files on local disk
-          try {
-            await fs.unlink(absoluteRawPath);
-            await fs.unlink(absoluteOptimizedPath);
-          } catch (unlinkErr) {
-            console.error("[Media Worker] Disk cleanup warning:", unlinkErr);
-          }
-
-        } catch (err: any) {
-          console.error(`[Media Worker] Process failed for item ${item.id}:`, err);
-          const failedItem = {
-            ...item,
-            status: "failed",
-            error: err.message || "Transformation failed",
-            failedAt: new Date().toISOString()
-          };
-          await db.hset("media:queue", { [item.id]: JSON.stringify(failedItem) });
         }
+      } finally {
+        await db.del(loopLockKey);
       }
     } catch (err) {
       console.error("[Media Worker] Queue loop execution failure:", err);
