@@ -139,58 +139,55 @@ export default async function DashboardPage() {
         {/* Dashboard Frame */}
         <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1360px] mx-auto w-full space-y-6 sm:space-y-8">
           
-          {/* Re-designed Premium Welcome & Quick Actions Bar */}
-          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#4A154B] via-[#6B3B6C] to-[#4A154B] border border-[#D4AF37]/20 p-6 sm:p-8 shadow-xl text-white">
-            {/* Background luxury overlay */}
-            <div className="absolute right-0 top-0 w-96 h-96 bg-radial-gradient from-[#D4AF37]/10 to-transparent opacity-60 pointer-events-none select-none" />
-            
+          {/* Simplified Subtle Welcome & Quick Actions Bar */}
+          <div className="relative overflow-hidden rounded-3xl bg-white border border-[#4A154B]/10 p-6 sm:p-8 shadow-sm text-[#1A1A1A]">
             <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-              <div className="space-y-2">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs font-semibold text-[#D4AF37]">
-                  <Sparkles size={12} className="animate-pulse" />
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 text-[10px] uppercase font-bold text-[#4A154B] tracking-wider">
+                  <Sparkles size={11} className="text-[#D4AF37]" />
                   <span>Reshmi Pallu Master Room</span>
                 </div>
-                <h3 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-wide">
+                <h3 className="font-display font-bold text-xl sm:text-2xl text-[#4A154B] tracking-wide">
                   Namaste, Mrinalini!
                 </h3>
-                <p className="text-sm text-white/80 max-w-xl">
+                <p className="text-xs text-[#1A1A1A]/60 max-w-xl">
                   Welcome back to your curation suite. Let&apos;s manage your beautiful, handwoven luxury sarees and refresh your storefront today.
                 </p>
               </div>
             </div>
 
             {/* Premium quick shortcut grids designed for non-technical users */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-8 pt-6 border-t border-white/10">
-              <Link href="/orders" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
-                <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-amber-300 mb-3 group-hover:scale-110 transition-transform">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-5 border-t border-[#4A154B]/10">
+              <Link href="/orders" className="group flex flex-col p-4 rounded-2xl bg-[#FAF8F5] border border-[#4A154B]/5 hover:border-[#4A154B]/20 transition-all duration-300 no-underline text-[#1A1A1A]">
+                <div className="w-10 h-10 rounded-xl bg-[#4A154B]/5 flex items-center justify-center text-[#4A154B] mb-3">
                   <FileText size={20} />
                 </div>
-                <span className="text-xs font-bold tracking-wide">Manage Orders</span>
-                <span className="text-[10px] text-white/60 mt-1">Fulfill orders & schedule logistics runs</span>
+                <span className="text-xs font-bold tracking-wide text-[#4A154B]">Manage Orders</span>
+                <span className="text-[10px] text-[#1A1A1A]/50 mt-1 leading-snug">Fulfill orders & schedule logistics runs</span>
               </Link>
 
-              <Link href="/products/add" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
-                <div className="w-10 h-10 rounded-xl bg-[#D4AF37]/20 flex items-center justify-center text-[#D4AF37] mb-3 group-hover:scale-110 transition-transform">
+              <Link href="/products/add" className="group flex flex-col p-4 rounded-2xl bg-[#FAF8F5] border border-[#4A154B]/5 hover:border-[#4A154B]/20 transition-all duration-300 no-underline text-[#1A1A1A]">
+                <div className="w-10 h-10 rounded-xl bg-[#4A154B]/5 flex items-center justify-center text-[#4A154B] mb-3">
                   <PlusCircle size={20} />
                 </div>
-                <span className="text-xs font-bold tracking-wide">Add a Saree</span>
-                <span className="text-[10px] text-white/60 mt-1">Design a new saree style & push to shop</span>
+                <span className="text-xs font-bold tracking-wide text-[#4A154B]">Add a Saree</span>
+                <span className="text-[10px] text-[#1A1A1A]/50 mt-1 leading-snug">Design a new saree style & push to shop</span>
               </Link>
 
-              <Link href="/bulk-upload" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-blue-300 mb-3 group-hover:scale-110 transition-transform">
+              <Link href="/bulk-upload" className="group flex flex-col p-4 rounded-2xl bg-[#FAF8F5] border border-[#4A154B]/5 hover:border-[#4A154B]/20 transition-all duration-300 no-underline text-[#1A1A1A]">
+                <div className="w-10 h-10 rounded-xl bg-[#4A154B]/5 flex items-center justify-center text-[#4A154B] mb-3">
                   <UploadCloud size={20} />
                 </div>
-                <span className="text-xs font-bold tracking-wide">Bulk CSV Import</span>
-                <span className="text-[10px] text-white/60 mt-1">Import multiple sarees instantly in one go</span>
+                <span className="text-xs font-bold tracking-wide text-[#4A154B]">Bulk CSV Import</span>
+                <span className="text-[10px] text-[#1A1A1A]/50 mt-1 leading-snug">Import multiple sarees instantly in one go</span>
               </Link>
 
-              <Link href="/discounts" className="group flex flex-col p-4 rounded-2xl bg-white/5 border border-white/10 hover:border-[#D4AF37]/50 hover:bg-white/10 transition-all duration-300 no-underline text-white">
-                <div className="w-10 h-10 rounded-xl bg-green-500/20 flex items-center justify-center text-green-300 mb-3 group-hover:scale-110 transition-transform">
+              <Link href="/discounts" className="group flex flex-col p-4 rounded-2xl bg-[#FAF8F5] border border-[#4A154B]/5 hover:border-[#4A154B]/20 transition-all duration-300 no-underline text-[#1A1A1A]">
+                <div className="w-10 h-10 rounded-xl bg-[#4A154B]/5 flex items-center justify-center text-[#4A154B] mb-3">
                   <Percent size={20} />
                 </div>
-                <span className="text-xs font-bold tracking-wide">Deals & Coupons</span>
-                <span className="text-[10px] text-white/60 mt-1">Launch discounts & clear aging inventory</span>
+                <span className="text-xs font-bold tracking-wide text-[#4A154B]">Deals & Coupons</span>
+                <span className="text-[10px] text-[#1A1A1A]/50 mt-1 leading-snug">Launch discounts & clear aging inventory</span>
               </Link>
             </div>
           </div>
