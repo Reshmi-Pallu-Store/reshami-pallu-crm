@@ -157,7 +157,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Premium quick shortcut grids designed for non-technical users */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6 pt-5 border-t border-[#4A154B]/10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 pt-5 border-t border-[#4A154B]/10">
               <Link href="/orders" className="group flex flex-col p-4 rounded-2xl bg-[#FAF8F5] border border-[#4A154B]/5 hover:border-[#4A154B]/20 transition-all duration-300 no-underline text-[#1A1A1A]">
                 <div className="w-10 h-10 rounded-xl bg-[#4A154B]/5 flex items-center justify-center text-[#4A154B] mb-3">
                   <FileText size={20} />
@@ -172,14 +172,6 @@ export default async function DashboardPage() {
                 </div>
                 <span className="text-xs font-bold tracking-wide text-[#4A154B]">Add a Saree</span>
                 <span className="text-[10px] text-[#1A1A1A]/50 mt-1 leading-snug">Design a new saree style & push to shop</span>
-              </Link>
-
-              <Link href="/bulk-upload" className="group flex flex-col p-4 rounded-2xl bg-[#FAF8F5] border border-[#4A154B]/5 hover:border-[#4A154B]/20 transition-all duration-300 no-underline text-[#1A1A1A]">
-                <div className="w-10 h-10 rounded-xl bg-[#4A154B]/5 flex items-center justify-center text-[#4A154B] mb-3">
-                  <UploadCloud size={20} />
-                </div>
-                <span className="text-xs font-bold tracking-wide text-[#4A154B]">Bulk CSV Import</span>
-                <span className="text-[10px] text-[#1A1A1A]/50 mt-1 leading-snug">Import multiple sarees instantly in one go</span>
               </Link>
 
               <Link href="/discounts" className="group flex flex-col p-4 rounded-2xl bg-[#FAF8F5] border border-[#4A154B]/5 hover:border-[#4A154B]/20 transition-all duration-300 no-underline text-[#1A1A1A]">
