@@ -13,11 +13,19 @@ function escapeHtml(unsafe: any): string {
     .replace(/'/g, "&#039;");
 }
 
+// Helper to clean/strip country codes from Indian/international numbers (e.g. +91)
+function formatPhoneNoCountryCode(phone: string): string {
+  if (!phone || phone === "—") return "—";
+  let clean = phone.replace(/\D/g, ""); // Strip non-digits
+  if (clean.length > 10) {
+    clean = clean.slice(-10); // Keep last 10 digits
+  }
+  return clean.replace(/(\d{5})(\d{5})/, "$1 $2"); // Format as 'XXXXX XXXXX'
+}
+
 /**
  * GET /api/orders/receipt?orderId=XXX
- * Returns a beautiful HTML order receipt.
- * Fetches from Upstash Redis order summaries first.
- * Fallback: Queries Shopify Admin GraphQL directly so the receipt can still render even if Redis cache is missing!
+ * Returns order receipt with latest customer email/phone from Shopify, plus office address & Udyam registration details.
  */
 export async function GET(req: NextRequest) {
   try {
@@ -35,10 +43,9 @@ export async function GET(req: NextRequest) {
       summary = typeof cached === "string" ? JSON.parse(cached) : cached;
     }
 
-    // Fallback: If not found in Redis, query Shopify Admin directly
-    if (!summary) {
-      console.log(`[Receipt Fallback] Order summary not cached in Redis. Querying Shopify for ID: ${orderId}`);
-      
+    // Always fetch latest profile details directly from Shopify Admin API to override stale cache fields
+    let shopifyOrder: any = null;
+    try {
       const query = `
         query getOrderReceiptDetails($id: ID!) {
           order(id: $id) {
@@ -72,6 +79,10 @@ export async function GET(req: NextRequest) {
               zip
               phone
             }
+            customer {
+              email
+              phone
+            }
             lineItems(first: 50) {
               edges {
                 node {
@@ -88,49 +99,47 @@ export async function GET(req: NextRequest) {
         }
       `;
 
-      try {
-        const res = await shopifyAdminFetch<{ order: any }>({
-          query,
-          variables: { id: orderId }
-        });
+      const res = await shopifyAdminFetch<{ order: any }>({
+        query,
+        variables: { id: orderId }
+      });
 
-        if (res?.order) {
-          const shopifyOrder = res.order;
-          
-          // Map Shopify fields to match the receipt summary structure
-          summary = {
-            orderNumber: shopifyOrder.name,
-            orderDate: new Date(shopifyOrder.createdAt).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric"
-            }),
-            confirmationEmail: shopifyOrder.email || "—",
-            customerPhone: shopifyOrder.phone || shopifyOrder.shippingAddress?.phone || "—",
-            shippingAddress: shopifyOrder.shippingAddress ? {
-              fullName: `${shopifyOrder.shippingAddress.firstName} ${shopifyOrder.shippingAddress.lastName || ""}`.trim(),
-              line1: shopifyOrder.shippingAddress.address1,
-              line2: shopifyOrder.shippingAddress.address2 || "",
-              city: shopifyOrder.shippingAddress.city,
-              state: shopifyOrder.shippingAddress.province,
-              pincode: shopifyOrder.shippingAddress.zip
-            } : null,
-            items: shopifyOrder.lineItems?.edges?.map((e: any) => ({
-              name: e.node.title,
-              qty: e.node.quantity,
-              variant: e.node.variantTitle || "Default Title",
-              price: parseFloat(e.node.originalUnitPriceSet?.presentmentMoney?.amount || "0")
-            })) || [],
-            subtotal: parseFloat(shopifyOrder.subtotalPriceSet?.presentmentMoney?.amount || "0"),
-            shipping: parseFloat(shopifyOrder.totalShippingPriceSet?.presentmentMoney?.amount || "0"),
-            tax: parseFloat(shopifyOrder.totalTaxSet?.presentmentMoney?.amount || "0"),
-            discount: -parseFloat(shopifyOrder.totalDiscountsSet?.presentmentMoney?.amount || "0"),
-            totalPaid: parseFloat(shopifyOrder.totalPriceSet?.presentmentMoney?.amount || "0")
-          };
-        }
-      } catch (shopifyErr) {
-        console.error("[Receipt Fallback Error] Querying Shopify failed:", shopifyErr);
+      if (res?.order) {
+        shopifyOrder = res.order;
+        
+        // Re-construct the summary object using direct live data
+        summary = {
+          orderNumber: shopifyOrder.name,
+          orderDate: new Date(shopifyOrder.createdAt).toLocaleDateString("en-IN", {
+            day: "numeric",
+            month: "short",
+            year: "numeric"
+          }),
+          confirmationEmail: shopifyOrder.customer?.email || shopifyOrder.email || "—",
+          customerPhone: shopifyOrder.customer?.phone || shopifyOrder.phone || shopifyOrder.shippingAddress?.phone || "—",
+          shippingAddress: shopifyOrder.shippingAddress ? {
+            fullName: `${shopifyOrder.shippingAddress.firstName} ${shopifyOrder.shippingAddress.lastName || ""}`.trim(),
+            line1: shopifyOrder.shippingAddress.address1,
+            line2: shopifyOrder.shippingAddress.address2 || "",
+            city: shopifyOrder.shippingAddress.city,
+            state: shopifyOrder.shippingAddress.province,
+            pincode: shopifyOrder.shippingAddress.zip
+          } : null,
+          items: shopifyOrder.lineItems?.edges?.map((e: any) => ({
+            name: e.node.title,
+            qty: e.node.quantity,
+            variant: e.node.variantTitle || "Default Title",
+            price: parseFloat(e.node.originalUnitPriceSet?.presentmentMoney?.amount || "0")
+          })) || [],
+          subtotal: parseFloat(shopifyOrder.subtotalPriceSet?.presentmentMoney?.amount || "0"),
+          shipping: parseFloat(shopifyOrder.totalShippingPriceSet?.presentmentMoney?.amount || "0"),
+          tax: parseFloat(shopifyOrder.totalTaxSet?.presentmentMoney?.amount || "0"),
+          discount: -parseFloat(shopifyOrder.totalDiscountsSet?.presentmentMoney?.amount || "0"),
+          totalPaid: parseFloat(shopifyOrder.totalPriceSet?.presentmentMoney?.amount || "0")
+        };
       }
+    } catch (shopifyErr) {
+      console.error("[Receipt Shopify Query Error]:", shopifyErr);
     }
 
     if (!summary) {
@@ -140,7 +149,10 @@ export async function GET(req: NextRequest) {
     const orderNumber = summary.orderNumber || orderId || "—";
     const orderDate = summary.orderDate || new Date().toLocaleDateString("en-IN");
     const email = summary.confirmationEmail || "—";
-    const phone = summary.customerPhone || "—";
+    
+    // Omit the country code from phone field display
+    const phone = formatPhoneNoCountryCode(summary.customerPhone);
+    
     const addr = summary.shippingAddress;
     const items: any[] = summary.items || [];
     const subtotal: number = summary.subtotal || 0;
@@ -297,13 +309,21 @@ export async function GET(req: NextRequest) {
   .footer {
     background: #faf6ff;
     border-top: 1px solid #ede6f7;
-    padding: 20px 40px;
+    padding: 24px 40px;
     text-align: center;
     font-size: 11px;
-    color: #aaa;
+    color: #555;
     letter-spacing: 0.5px;
+    line-height: 1.6;
   }
   .footer a { color: #7c5c9a; text-decoration: none; }
+  .office-details {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px dashed #ede6f7;
+    color: #888;
+    font-size: 10px;
+  }
   /* Print */
   @media print {
     body { background: #fff; padding: 0; }
@@ -396,8 +416,13 @@ export async function GET(req: NextRequest) {
   <div class="footer">
     <p>Thank you for shopping with <strong>Reshmi Pallu</strong>.</p>
     <p style="margin-top:4px;">Questions? <a href="mailto:founder@reshmipallu.com">founder@reshmipallu.com</a></p>
-    <p style="margin-top:10px;font-size:10px;">
-      This is a computer-generated receipt and does not require a signature.
+    
+    <div class="office-details">
+      <p><strong>Office Address:</strong> Second Floor, D-194, Okhla Industrial Area Phase 1, New Delhi, Delhi 110020</p>
+      <p style="margin-top:4px;"><strong>Udyam Registration Number:</strong> UDYAM-KR-03-0697865</p>
+    </div>
+    <p style="margin-top:12px;font-size:9px;color:#bbb;">
+      This is a computer-generated receipt and does not require a physical signature.
     </p>
   </div>
 </div>
