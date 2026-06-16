@@ -21,7 +21,7 @@ interface Coupon {
   discountPercent: number;
   minPurchase: number;
   isActive: boolean;
-  campaignType?: "standard" | "dead_stock" | "custom";
+  campaignType?: "standard" | "dead_stock" | "custom" | "first_order";
   deadStockAgeMonths?: number;
   isPublic?: boolean;
   expiresAt?: string | null;
@@ -245,14 +245,26 @@ export default function DiscountsPage() {
                 <label className="text-xs font-bold uppercase tracking-wider text-[#4A154B]/70">Campaign Type</label>
                 <select
                   value={form.campaignType}
-                  onChange={(e) => setForm(f => ({ ...f, campaignType: e.target.value as "standard" | "dead_stock" | "custom" }))}
+                  onChange={(e) => setForm(f => ({ ...f, campaignType: e.target.value as "standard" | "dead_stock" | "custom" | "first_order" }))}
                   className={inputCls}
                 >
                   <option value="standard">Standard (Storewide)</option>
+                  <option value="first_order">First Order (New Customers Only)</option>
                   <option value="dead_stock">Dead Stock Campaign (Select old sarees only)</option>
                   <option value="custom">Custom (Private Alphanumeric Code)</option>
                 </select>
               </div>
+
+              {form.campaignType === "first_order" && (
+                <div className="col-span-full flex items-start gap-3 p-3.5 rounded-xl bg-[#4A154B]/5 border border-[#4A154B]/10 text-xs text-[#4A154B]/70 leading-relaxed">
+                  <span className="text-base leading-none mt-0.5">🎁</span>
+                  <div>
+                    <span className="font-bold text-[#4A154B]">First Order Discount</span> — this coupon is automatically verified at checkout.
+                    If the customer's phone/email already has a prior order in Shopify, the code will be rejected with a clear message.
+                    New customers (no prior orders) can use it freely.
+                  </div>
+                </div>
+              )}
 
               {form.campaignType === "dead_stock" && (
                 <div className="flex flex-col gap-1.5">
@@ -376,9 +388,17 @@ export default function DiscountsPage() {
                               ? "bg-red-50 text-red-700 border border-red-100"
                               : coupon.campaignType === "custom"
                               ? "bg-purple-50 text-purple-700 border border-purple-100"
+                              : coupon.campaignType === "first_order"
+                              ? "bg-teal-50 text-teal-700 border border-teal-100"
                               : "bg-blue-50 text-blue-700 border border-blue-100"
                           }`}>
-                            {coupon.campaignType === "dead_stock" ? `Dead Stock (${coupon.deadStockAgeMonths}m)` : coupon.campaignType === "custom" ? "Custom (Private)" : "Storewide"}
+                            {coupon.campaignType === "dead_stock"
+                              ? `Dead Stock (${coupon.deadStockAgeMonths}m)`
+                              : coupon.campaignType === "custom"
+                              ? "Custom (Private)"
+                              : coupon.campaignType === "first_order"
+                              ? "🎁 First Order"
+                              : "Storewide"}
                           </span>
                         </div>
                         <p className="text-xs text-[#1A1A1A]/50 mt-1 flex flex-wrap gap-x-2 gap-y-1 items-center">
