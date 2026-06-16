@@ -463,8 +463,8 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
             </div>
           ) : (
             <div className="space-y-4">
-              {/* Table list of unfulfilled */}
-              <div className="overflow-x-auto border border-[#4A154B]/10 rounded-xl">
+              {/* Desktop view: Table list of unfulfilled */}
+              <div className="hidden md:block overflow-x-auto border border-[#4A154B]/10 rounded-xl">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
                     <tr className="border-b border-[#4A154B]/5 bg-[#FAF8F5] text-[10px] uppercase font-bold text-[#1A1A1A]/55">
@@ -609,6 +609,138 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Mobile view: Lite Card list of unfulfilled */}
+              <div className="flex flex-col space-y-3 md:hidden">
+                {unfulfilledOrders.map((o) => {
+                  const isChecked = !!selectedUnfulfilled[o.id];
+                  const dims = orderDimensions[o.id] || { weightGrams: "500", length: "30", width: "20", height: "5" };
+                  const customerName = `${o.shippingAddress?.firstName || o.customer?.firstName || "Customer"} ${o.shippingAddress?.lastName || o.customer?.lastName || ""}`.trim();
+
+                  return (
+                    <div 
+                      key={o.id} 
+                      className={`p-4 rounded-xl border border-[#4A154B]/10 bg-white flex flex-col gap-3 transition-colors ${isChecked ? "ring-2 ring-[#4A154B] bg-[#4A154B]/5" : ""}`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleUnfulfilled(o.id)}
+                            className="w-4 h-4 rounded text-[#4A154B] border-[#4A154B]/10 cursor-pointer"
+                          />
+                          <span className="font-bold text-[#4A154B]">{o.name}</span>
+                        </div>
+                        <span className="text-[10px] font-bold uppercase text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          Awaiting Dispatch
+                        </span>
+                      </div>
+
+                      <div className="text-xs">
+                        <p className="font-semibold text-[#1A1A1A]">{customerName}</p>
+                        <p className="text-[10px] text-[#1A1A1A]/50 mt-0.5">{o.shippingAddress?.city || "N/A"}</p>
+                      </div>
+
+                      {isChecked && (
+                        <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5 space-y-2.5">
+                          <p className="text-[9px] uppercase font-bold text-[#4A154B]/60 tracking-wider">Configure Shipment Size</p>
+                          <div className="flex justify-between items-center gap-2 text-xs">
+                            <span className="text-[#1A1A1A]/60">Weight (g):</span>
+                            <input
+                              type="text"
+                              value={dims.weightGrams}
+                              onChange={(e) => handleDimensionChange(o.id, "weightGrams", e.target.value)}
+                              className="w-16 h-8 text-center rounded border border-[#4A154B]/15 bg-white text-xs outline-none font-bold"
+                            />
+                          </div>
+                          <div className="flex justify-between items-center gap-2 text-xs">
+                            <span className="text-[#1A1A1A]/60">Size (L×W×H cm):</span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={dims.length}
+                                onChange={(e) => handleDimensionChange(o.id, "length", e.target.value)}
+                                className="w-9 h-8 text-center rounded border border-[#4A154B]/15 bg-white text-xs outline-none"
+                              />
+                              <span className="text-[9px] text-[#1A1A1A]/30">×</span>
+                              <input
+                                type="text"
+                                value={dims.width}
+                                onChange={(e) => handleDimensionChange(o.id, "width", e.target.value)}
+                                className="w-9 h-8 text-center rounded border border-[#4A154B]/15 bg-white text-xs outline-none"
+                              />
+                              <span className="text-[9px] text-[#1A1A1A]/30">×</span>
+                              <input
+                                type="text"
+                                value={dims.height}
+                                onChange={(e) => handleDimensionChange(o.id, "height", e.target.value)}
+                                className="w-9 h-8 text-center rounded border border-[#4A154B]/15 bg-white text-xs outline-none"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="pt-2 border-t border-[#4A154B]/5 flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setManualFulfillOrderId(manualFulfillOrderId === o.id ? null : o.id)}
+                          className="w-full py-2 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-[#4A154B]/5 text-[#4A154B] hover:bg-[#4A154B]/10 cursor-pointer transition-all"
+                        >
+                          {manualFulfillOrderId === o.id ? "Cancel Manual Fulfill" : "Manual Fulfill Shipment"}
+                        </button>
+                        
+                        {manualFulfillOrderId === o.id && (
+                          <div className="p-3 bg-[#FAF8F5] border border-[#4A154B]/10 rounded-lg space-y-2 text-[11px] font-semibold">
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-[#4A154B]/60 mb-1">AWB Number</label>
+                              <input
+                                type="text"
+                                value={manualAwb}
+                                onChange={(e) => setManualAwb(e.target.value)}
+                                placeholder="Enter tracking AWB"
+                                className="w-full h-8 px-2 rounded border border-[#4A154B]/15 bg-white text-xs outline-none focus:border-[#4A154B]"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-[9px] uppercase font-bold text-[#4A154B]/60 mb-1">Courier Partner</label>
+                              <select
+                                value={manualCourier}
+                                onChange={(e) => setManualCourier(e.target.value)}
+                                className="w-full h-8 px-2 rounded border border-[#4A154B]/15 bg-white text-xs outline-none focus:border-[#4A154B] cursor-pointer"
+                              >
+                                <option value="">Select Partner</option>
+                                <option value="Delhivery">Delhivery</option>
+                                <option value="Shiprocket">Shiprocket</option>
+                                <option value="Bluedart">Bluedart</option>
+                                <option value="DTDC">DTDC</option>
+                                <option value="India Post">India Post</option>
+                                <option value="Professional Couriers">Professional Couriers</option>
+                                <option value="Ekart Logistics">Ekart Logistics</option>
+                                <option value="Shadowfax">Shadowfax</option>
+                                <option value="Xpressbees">Xpressbees</option>
+                                <option value="SafeExpress">SafeExpress</option>
+                                <option value="Trackon">Trackon</option>
+                                <option value="Anjani">Anjani</option>
+                                <option value="Shree Maruti Courier">Shree Maruti Courier</option>
+                              </select>
+                            </div>
+                            <button
+                              type="button"
+                              disabled={!manualAwb || !manualCourier || manualFulfilling}
+                              onClick={() => handleManualFulfillSubmit(o.id)}
+                              className="w-full h-8 rounded bg-green-600 hover:bg-green-700 text-white font-bold uppercase text-[10px] tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                            >
+                              {manualFulfilling ? "Fulfilling..." : "Mark Dispatched"}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {/* Bulk Dispatch Scheduler Drawer/Options shown when 1+ checked */}
@@ -995,8 +1127,10 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
       </div>
 
       {/* Orders Grid Table */}
+      {/* Orders Grid Table */}
       <div className="ui-card overflow-hidden bg-white">
-        <div className="overflow-x-auto">
+        {/* Desktop view table */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-[#4A154B]/5 bg-[#FAF8F5]/50 text-[11px] uppercase font-bold text-[#1A1A1A]/50 tracking-wider">
@@ -1145,6 +1279,76 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View card list */}
+        <div className="md:hidden divide-y divide-[#4A154B]/5">
+          {filteredOrders.length === 0 ? (
+            <div className="py-12 text-center text-[#1A1A1A]/40 font-medium px-4">
+              <Package size={32} className="mx-auto mb-2 opacity-30" />
+              No customer orders found matching your search.
+            </div>
+          ) : (
+            filteredOrders.map((order) => {
+              const { totalRetail, marginPercent } = getOrderNetMargin(order);
+              const isPaid = order.displayFinancialStatus === "PAID";
+              const customerName = order.customer && (order.customer.firstName || order.customer.lastName)
+                ? `${order.customer.firstName || ""} ${order.customer.lastName || ""}`.trim()
+                : order.shippingAddress && (order.shippingAddress.firstName || order.shippingAddress.lastName)
+                ? `${order.shippingAddress.firstName || ""} ${order.shippingAddress.lastName || ""}`.trim()
+                : "Customer";
+
+              return (
+                <div 
+                  key={order.id}
+                  onClick={() => setSelectedOrder(order)}
+                  className="p-4 flex flex-col gap-2.5 active:bg-[#FAF8F5]/60 transition-colors cursor-pointer"
+                >
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-[#4A154B]">{order.name}</span>
+                    <span className="text-[11px] text-[#1A1A1A]/50">
+                      {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric"
+                      })}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-xs font-semibold text-[#1A1A1A]">{customerName}</p>
+                      {order.shippingAddress?.city && (
+                        <p className="text-[10px] text-[#1A1A1A]/40 flex items-center gap-0.5 mt-0.5">
+                          <MapPin size={9} />
+                          {order.shippingAddress.city}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-bold text-[#4A154B]">₹{totalRetail.toLocaleString("en-IN")}</p>
+                      <span className={`inline-block text-[9px] font-bold uppercase rounded px-1 mt-0.5 ${
+                        isPaid ? "bg-green-50 text-green-700" : "bg-yellow-50 text-yellow-700"
+                      }`}>
+                        {order.displayFinancialStatus}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-[#4A154B]/5 justify-between items-center">
+                    <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 border ${getMarginColor(marginPercent)}`}>
+                      +{Math.round(marginPercent)}% Margin
+                    </span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                      order.displayFulfillmentStatus === "FULFILLED" 
+                        ? "bg-green-50 text-green-700 border-green-200" 
+                        : "bg-yellow-50 text-yellow-700 border-yellow-200"
+                    }`}>
+                      {order.displayFulfillmentStatus === "FULFILLED" ? "Shipped" : "Processing"}
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

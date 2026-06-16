@@ -187,7 +187,7 @@ export default async function DashboardPage() {
             </div>
           </div>
 
-          {/* New Visual Showroom Carousel */}
+          {/* Active Showroom Gallery */}
           <div className="space-y-3">
             <div className="flex justify-between items-center px-1">
               <div>
@@ -203,57 +203,104 @@ export default async function DashboardPage() {
               </Link>
             </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin scroll-smooth">
-              {products.slice(0, 10).map((p) => (
-                <div 
-                  key={p.id} 
-                  className="snap-start shrink-0 w-48 bg-white border border-[#4A154B]/10 rounded-2xl p-3 shadow-sm hover:shadow-md hover:border-[#D4AF37]/50 transition-all duration-300 group flex flex-col justify-between"
-                >
-                  <div className="space-y-3">
-                    {/* Saree Image Thumbnail */}
-                    <div className="w-full h-44 rounded-xl bg-gradient-to-tr from-[#FAF8F5] to-white overflow-hidden relative border border-[#4A154B]/5">
-                      {p.imageUrl ? (
-                        <img 
-                          src={p.imageUrl} 
-                          alt={p.title} 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
-                        />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-[#4A154B]/30 gap-1.5 p-4">
-                          <ShoppingBag size={24} />
-                          <span className="text-[9px] uppercase tracking-wider font-semibold">No Image</span>
-                        </div>
-                      )}
-                      
-                      {/* Floating Stock Badge */}
-                      <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
-                        p.stock === 0
-                          ? 'bg-red-50 text-red-600 border-red-100'
-                          : p.stock < 3
-                          ? 'bg-amber-50 text-amber-700 border-amber-100'
-                          : 'bg-green-50 text-green-700 border-green-100'
-                      }`}>
-                        {p.stock === 0 ? "Out of Stock" : `${p.stock} units`}
-                      </span>
+            {/* Desktop: Grid Layout | Mobile: Swipeable Scroll List */}
+            <div className="w-full">
+              {/* Desktop view: 4 Columns Grid */}
+              <div className="hidden md:grid md:grid-cols-4 gap-6">
+                {products.slice(0, 8).map((p) => (
+                  <div 
+                    key={p.id} 
+                    className="bg-white border border-[#4A154B]/10 rounded-2xl p-4 shadow-sm hover:shadow-md hover:border-[#D4AF37]/50 transition-all duration-300 group flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="w-full h-48 rounded-xl bg-gradient-to-tr from-[#FAF8F5] to-white overflow-hidden relative border border-[#4A154B]/5">
+                        {p.imageUrl ? (
+                          <img 
+                            src={p.imageUrl} 
+                            alt={p.title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-[#4A154B]/30 gap-1.5 p-4">
+                            <ShoppingBag size={24} />
+                            <span className="text-[9px] uppercase tracking-wider font-semibold">No Image</span>
+                          </div>
+                        )}
+                        <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          p.stock === 0
+                            ? 'bg-red-50 text-red-600 border-red-100'
+                            : p.stock < 3
+                            ? 'bg-amber-50 text-amber-700 border-amber-100'
+                            : 'bg-green-50 text-green-700 border-green-100'
+                        }`}>
+                          {p.stock === 0 ? "Out of Stock" : `${p.stock} units`}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <h5 className="font-semibold text-xs text-[#4A154B] line-clamp-1 group-hover:text-[#D4AF37] transition-colors">
+                          {p.title}
+                        </h5>
+                        <span className="text-[10px] font-mono text-[#1A1A1A]/40 block">SKU: {p.sku || "N/A"}</span>
+                      </div>
                     </div>
-
-                    <div className="space-y-1">
-                      <h5 className="font-semibold text-xs text-[#4A154B] line-clamp-1 group-hover:text-[#D4AF37] transition-colors">
-                        {p.title}
-                      </h5>
-                      <span className="text-[10px] font-mono text-[#1A1A1A]/40 block">SKU: {p.sku || "N/A"}</span>
+                    <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#4A154B]/5">
+                      <span className="text-xs font-bold text-[#4A154B]">₹{(p.price || 0).toLocaleString('en-IN')}</span>
+                      <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-[10px] uppercase font-bold tracking-wider text-[#D4AF37] hover:text-[#4A154B] transition-colors">
+                        Edit
+                      </Link>
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#4A154B]/5">
-                    <span className="text-xs font-bold text-[#4A154B]">₹{(p.price || 0).toLocaleString('en-IN')}</span>
-                    <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-[10px] uppercase font-bold tracking-wider text-[#D4AF37] hover:text-[#4A154B] transition-colors">
-                      Edit
-                    </Link>
+              {/* Mobile View: Swipeable Horizontal Carousel */}
+              <div className="md:hidden flex gap-4 overflow-x-auto pb-4 pt-1 snap-x scrollbar-thin scroll-smooth">
+                {products.slice(0, 8).map((p) => (
+                  <div 
+                    key={p.id} 
+                    className="snap-start shrink-0 w-48 bg-white border border-[#4A154B]/10 rounded-2xl p-3 shadow-sm hover:shadow-md hover:border-[#D4AF37]/50 transition-all duration-300 group flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="w-full h-44 rounded-xl bg-gradient-to-tr from-[#FAF8F5] to-white overflow-hidden relative border border-[#4A154B]/5">
+                        {p.imageUrl ? (
+                          <img 
+                            src={p.imageUrl} 
+                            alt={p.title} 
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center text-[#4A154B]/30 gap-1.5 p-4">
+                            <ShoppingBag size={24} />
+                            <span className="text-[9px] uppercase tracking-wider font-semibold">No Image</span>
+                          </div>
+                        )}
+                        <span className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          p.stock === 0
+                            ? 'bg-red-50 text-red-600 border-red-100'
+                            : p.stock < 3
+                            ? 'bg-amber-50 text-amber-700 border-amber-100'
+                            : 'bg-green-50 text-green-700 border-green-100'
+                        }`}>
+                          {p.stock === 0 ? "Out of Stock" : `${p.stock} units`}
+                        </span>
+                      </div>
+                      <div className="space-y-1">
+                        <h5 className="font-semibold text-xs text-[#4A154B] line-clamp-1 group-hover:text-[#D4AF37] transition-colors">
+                          {p.title}
+                        </h5>
+                        <span className="text-[10px] font-mono text-[#1A1A1A]/40 block">SKU: {p.sku || "N/A"}</span>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#4A154B]/5">
+                      <span className="text-xs font-bold text-[#4A154B]">₹{(p.price || 0).toLocaleString('en-IN')}</span>
+                      <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-[10px] uppercase font-bold tracking-wider text-[#D4AF37] hover:text-[#4A154B] transition-colors">
+                        Edit
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              ))}
-              
+                ))}
+              </div>
+
               {products.length === 0 && (
                 <div className="w-full h-32 rounded-2xl border border-dashed border-[#4A154B]/10 flex flex-col items-center justify-center bg-white/40">
                   <p className="text-xs text-[#1A1A1A]/40 font-medium">
@@ -388,47 +435,77 @@ export default async function DashboardPage() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-[#4A154B]/10 text-[10px] uppercase tracking-wider text-[#1A1A1A]/50 font-bold">
-                        <th className="pb-3">Saree Title</th>
-                        <th className="pb-3">SKU</th>
-                        <th className="pb-3 text-center">Current Stock</th>
-                        <th className="pb-3 text-right">Retail Price</th>
-                        <th className="pb-3 text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[#4A154B]/5 text-xs text-[#1A1A1A]/80">
-                      {lowStockProducts.slice(0, 5).map((p) => (
-                        <tr key={p.id} className="hover:bg-[#4A154B]/5 transition-colors duration-200">
-                          <td className="py-3 font-semibold text-[#4A154B] max-w-[200px] truncate">
-                            {p.title}
-                          </td>
-                          <td className="py-3 font-mono text-[11px] text-[#1A1A1A]/60">
-                            {p.sku}
-                          </td>
-                          <td className="py-3 text-center">
-                            <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                              p.stock === 0 
-                                ? 'bg-red-50 text-red-600 border border-red-100' 
-                                : 'bg-[#D4AF37]/5 text-[#4A154B] border border-[#D4AF37]/20'
-                            }`}>
-                              {p.stock === 0 ? "Out of Stock" : `${p.stock} left`}
-                            </span>
-                          </td>
-                          <td className="py-3 text-right font-medium">
-                            ₹{(p.price || 0).toLocaleString('en-IN')}
-                          </td>
-                          <td className="py-3 text-right">
-                            <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-xs bg-[#4A154B]/5 text-[#4A154B] hover:bg-[#4A154B] hover:text-white px-2.5 py-1 rounded font-semibold transition-colors duration-200">
-                              Edit Stock
-                            </Link>
-                          </td>
+                <div className="w-full">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-[#4A154B]/10 text-[10px] uppercase tracking-wider text-[#1A1A1A]/50 font-bold">
+                          <th className="pb-3">Saree Title</th>
+                          <th className="pb-3">SKU</th>
+                          <th className="pb-3 text-center">Current Stock</th>
+                          <th className="pb-3 text-right">Retail Price</th>
+                          <th className="pb-3 text-right">Actions</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody className="divide-y divide-[#4A154B]/5 text-xs text-[#1A1A1A]/80">
+                        {lowStockProducts.slice(0, 5).map((p) => (
+                          <tr key={p.id} className="hover:bg-[#4A154B]/5 transition-colors duration-200">
+                            <td className="py-3 font-semibold text-[#4A154B] max-w-[200px] truncate">
+                              {p.title}
+                            </td>
+                            <td className="py-3 font-mono text-[11px] text-[#1A1A1A]/60">
+                              {p.sku}
+                            </td>
+                            <td className="py-3 text-center">
+                              <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                                p.stock === 0 
+                                  ? 'bg-red-50 text-red-600 border border-red-100' 
+                                  : 'bg-[#D4AF37]/5 text-[#4A154B] border border-[#D4AF37]/20'
+                              }`}>
+                                {p.stock === 0 ? "Out of Stock" : `${p.stock} left`}
+                              </span>
+                            </td>
+                            <td className="py-3 text-right font-medium">
+                              ₹{(p.price || 0).toLocaleString('en-IN')}
+                            </td>
+                            <td className="py-3 text-right">
+                              <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-xs bg-[#4A154B]/5 text-[#4A154B] hover:bg-[#4A154B] hover:text-white px-2.5 py-1 rounded font-semibold transition-colors duration-200">
+                                Edit Stock
+                              </Link>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile Lite Card-Based View */}
+                  <div className="flex flex-col space-y-2 md:hidden">
+                    {lowStockProducts.slice(0, 5).map((p) => (
+                      <div key={p.id} className="p-3.5 rounded-xl border border-[#4A154B]/5 bg-[#FAF8F5]/30 flex flex-col gap-2">
+                        <div className="flex justify-between items-start">
+                          <span className="font-semibold text-xs text-[#4A154B] truncate max-w-[150px]">{p.title}</span>
+                          <span className={`px-2 py-0.5 rounded-full font-bold text-[9px] ${
+                            p.stock === 0 
+                              ? 'bg-red-50 text-red-600 border border-red-100' 
+                              : 'bg-[#D4AF37]/5 text-[#4A154B] border border-[#D4AF37]/20'
+                          }`}>
+                            {p.stock === 0 ? "Out of Stock" : `${p.stock} left`}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-[10px] text-[#1A1A1A]/60">
+                          <span>SKU: <span className="font-mono">{p.sku}</span></span>
+                          <span className="font-medium text-[#1A1A1A]">₹{(p.price || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                        <div className="pt-2 border-t border-[#4A154B]/5 flex justify-end">
+                          <Link href={`/products/edit/${p.id.split('/').pop()}`} className="no-underline text-[10px] bg-[#4A154B]/5 text-[#4A154B] hover:bg-[#4A154B] hover:text-white px-2.5 py-1 rounded-lg font-bold transition-all">
+                            Edit Stock
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -573,51 +650,79 @@ export default async function DashboardPage() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-[#4A154B]/10 text-[10px] uppercase tracking-wider text-[#1A1A1A]/50 font-bold">
-                      <th className="pb-3">Saree Title</th>
-                      <th className="pb-3">SKU</th>
-                      <th className="pb-3 text-center">Age (Days)</th>
-                      <th className="pb-3 text-center">Stock Level</th>
-                      <th className="pb-3 text-right">Retail Value</th>
-                      <th className="pb-3 text-right">Cost Price</th>
-                      <th className="pb-3 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#4A154B]/5 text-xs text-[#1A1A1A]/80">
-                    {deadStockProducts.map((p) => (
-                      <tr key={p.id} className="hover:bg-red-50/30 transition-colors duration-200">
-                        <td className="py-3 font-semibold text-[#4A154B] max-w-[250px] truncate">
-                          {p.title}
-                        </td>
-                        <td className="py-3 font-mono text-[11px] text-[#1A1A1A]/60">
-                          {p.sku}
-                        </td>
-                        <td className="py-3 text-center font-bold text-red-600">
-                          {p.ageInDays} days
-                        </td>
-                        <td className="py-3 text-center">
-                          <span className="bg-[#4A154B]/5 text-[#4A154B] px-2 py-0.5 rounded font-medium">
-                            {p.stock} units
-                          </span>
-                        </td>
-                        <td className="py-3 text-right font-medium">
-                          ₹{(p.price || 0).toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-3 text-right text-[#1A1A1A]/60">
-                          ₹{(p.costPrice || 0).toLocaleString('en-IN')}
-                        </td>
-                        <td className="py-3 text-right">
-                          <Link href="/discounts" className="no-underline text-xs bg-red-50 text-red-700 hover:bg-red-600 hover:text-white px-2.5 py-1 rounded font-semibold transition-colors duration-200 inline-block">
-                            Run Campaign
-                          </Link>
-                        </td>
+              <div className="w-full">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="border-b border-[#4A154B]/10 text-[10px] uppercase tracking-wider text-[#1A1A1A]/50 font-bold">
+                        <th className="pb-3">Saree Title</th>
+                        <th className="pb-3">SKU</th>
+                        <th className="pb-3 text-center">Age (Days)</th>
+                        <th className="pb-3 text-center">Stock Level</th>
+                        <th className="pb-3 text-right">Retail Value</th>
+                        <th className="pb-3 text-right">Cost Price</th>
+                        <th className="pb-3 text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-[#4A154B]/5 text-xs text-[#1A1A1A]/80">
+                      {deadStockProducts.map((p) => (
+                        <tr key={p.id} className="hover:bg-red-50/30 transition-colors duration-200">
+                          <td className="py-3 font-semibold text-[#4A154B] max-w-[250px] truncate">
+                            {p.title}
+                          </td>
+                          <td className="py-3 font-mono text-[11px] text-[#1A1A1A]/60">
+                            {p.sku}
+                          </td>
+                          <td className="py-3 text-center font-bold text-red-600">
+                            {p.ageInDays} days
+                          </td>
+                          <td className="py-3 text-center">
+                            <span className="bg-[#4A154B]/5 text-[#4A154B] px-2 py-0.5 rounded font-medium">
+                              {p.stock} units
+                            </span>
+                          </td>
+                          <td className="py-3 text-right font-medium">
+                            ₹{(p.price || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 text-right text-[#1A1A1A]/60">
+                            ₹{(p.costPrice || 0).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-3 text-right">
+                            <Link href="/discounts" className="no-underline text-xs bg-red-50 text-red-700 hover:bg-red-600 hover:text-white px-2.5 py-1 rounded font-semibold transition-colors duration-200 inline-block">
+                              Run Campaign
+                            </Link>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile Lite Card View */}
+                <div className="flex flex-col space-y-2 md:hidden">
+                  {deadStockProducts.map((p) => (
+                    <div key={p.id} className="p-3.5 rounded-xl border border-red-100 bg-red-50/10 flex flex-col gap-2">
+                      <div className="flex justify-between items-start gap-2">
+                        <span className="font-semibold text-xs text-[#4A154B] truncate max-w-[150px]">{p.title}</span>
+                        <span className="text-[10px] font-bold text-red-600 shrink-0">{p.ageInDays} days old</span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] text-[#1A1A1A]/60">
+                        <span>SKU: <span className="font-mono">{p.sku}</span></span>
+                        <span>Stock: <span className="font-semibold text-[#4A154B]">{p.stock} units</span></span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] border-t border-[#4A154B]/5 pt-2 mt-1">
+                        <div>
+                          <span className="text-[#1A1A1A]/50">Retail: </span>
+                          <span className="font-bold text-[#4A154B]">₹{(p.price || 0).toLocaleString('en-IN')}</span>
+                        </div>
+                        <Link href="/discounts" className="no-underline text-[10px] bg-red-50 text-red-700 hover:bg-red-600 hover:text-white px-2.5 py-1 rounded-lg font-bold transition-all">
+                          Campaign
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
           </div>
