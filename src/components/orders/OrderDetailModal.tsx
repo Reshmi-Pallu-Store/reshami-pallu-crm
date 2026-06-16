@@ -248,13 +248,21 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
         {/* Header */}
         <div className="p-6 border-b border-[#4A154B]/10 bg-white flex justify-between items-center">
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <h2 className="text-xl font-display font-bold text-[#4A154B]">{order.name}</h2>
               <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
                 order.displayFinancialStatus === "PAID" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
               }`}>
                 {order.displayFinancialStatus}
               </span>
+              <a
+                href={`/api/orders/receipt?orderId=${encodeURIComponent(order.id)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-amber-50 hover:bg-amber-100 text-[#4A154B] border border-[#D4AF37]/35 no-underline transition-all shadow-sm"
+              >
+                <span>Receipt Copy 📄</span>
+              </a>
             </div>
             <p className="text-xs text-[#1A1A1A]/60 flex items-center gap-1 mt-1">
               <Calendar size={12} />
