@@ -7,7 +7,6 @@ import {
   MapPin, 
   CreditCard, 
   TrendingUp, 
-  DollarSign, 
   Truck, 
   Calendar,
   Phone,
@@ -34,15 +33,6 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
   const [customerProfile, setCustomerProfile] = useState<any>(null);
   const [loadingCustomer, setLoadingCustomer] = useState(false);
 
-  // Delhivery fulfillment state
-  const [fulfilling, setFulfilling] = useState(false);
-  const [fulfillmentError, setFulfillmentError] = useState<string | null>(null);
-  const [manualWeight, setManualWeight] = useState("0.5");
-  const [manualLength, setManualLength] = useState("30");
-  const [manualWidth, setManualWidth] = useState("20");
-  const [manualHeight, setManualHeight] = useState("5");
-
-
   // Parse Razorpay IDs from Shopify Order Note
   const noteText = order.note || "";
   const orderIdMatch = noteText.match(/Order ID:\s*([^\s,]+)/i);
@@ -52,38 +42,22 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
   const razorpayPaymentId = paymentIdMatch ? paymentIdMatch[1] : null;
 
   // Parse shipping details from order note
-  const shippingAmountMatch = noteText.match(/Shipping Amount:\s*₹([\d.]+)/i);
-  const shippingLabelMatch = noteText.match(/Shipping:\s*([^,\n]+)/i);
   const courierCostMatch = noteText.match(/Courier Cost:\s*₹([\d.]+)/i);
-  const shippingNoteAmount = shippingAmountMatch ? parseFloat(shippingAmountMatch[1]) : null;
-  const shippingNoteLabel = shippingLabelMatch ? shippingLabelMatch[1].trim() : null;
   const actualCourierCostFromNote = courierCostMatch ? parseFloat(courierCostMatch[1]) : null;
 
-  // Derive shipping from Shopify's shippingLine or from the order note
+  // Exact shipping charged to customer from Shopify
   const shopifyShippingAmount = parseFloat(
     order.shippingLines?.edges?.[0]?.node?.originalPriceSet?.presentmentMoney?.amount ||
     order.totalShippingPriceSet?.presentmentMoney?.amount ||
     "0"
   );
-  // Prefer the note-parsed amount (exact value charged by our system), fallback to Shopify's shipping line
-  const exactShippingCharged = shippingNoteAmount !== null ? shippingNoteAmount : shopifyShippingAmount;
-
-  // Derive shipping speed from tags
-  const speedTag = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("speed:"));
-  const shippingSpeedFromTag = speedTag ? speedTag.split(":")[1]?.trim() : null;
-
-  // Courier from tags
-  const courierTagFull = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("courier:"));
-  const courierNameFromTag = courierTagFull ? courierTagFull.split(":")[1]?.trim() : null;
 
   const [cachedAwb, setCachedAwb] = useState<string | null>(null);
-  const [labelDownloaded, setLabelDownloaded] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const val = localStorage.getItem(`awb_cache_${order.id}`);
       if (val) setCachedAwb(val);
-      setLabelDownloaded(localStorage.getItem(`downloaded_label_${order.id}`) === "true");
     }
   }, [order.id]);
 
@@ -91,19 +65,10 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
   const awbAttribute = order.customAttributes?.find((attr: any) => attr.key.toLowerCase() === "awb" || attr.key.toLowerCase() === "trackingid");
   let awb = awbAttribute ? awbAttribute.value : (cachedAwb || null);
 
-  // Secondary fallback: parse AWB from notes or Redis summaries if not found in custom attributes
   if (!awb) {
     const awbMatch = noteText.match(/AWB:\s*([^\s,]+)/i);
     if (awbMatch) awb = awbMatch[1];
   }
-
-  // Extract scheduled pickup details
-  const pickupIdAttribute = order.customAttributes?.find((attr: any) => attr.key.toLowerCase() === "pickup_id");
-  const pickupDateAttribute = order.customAttributes?.find((attr: any) => attr.key.toLowerCase() === "pickup_date");
-  const pickupTimeAttribute = order.customAttributes?.find((attr: any) => attr.key.toLowerCase() === "pickup_time");
-  const pickupId = pickupIdAttribute ? pickupIdAttribute.value : null;
-  const scheduledPickupDate = pickupDateAttribute ? pickupDateAttribute.value : null;
-  const scheduledPickupTime = pickupTimeAttribute ? pickupTimeAttribute.value : null;
 
   // Load Delhivery tracking info if AWB exists
   const fetchTrackingData = async () => {
@@ -124,53 +89,6 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
       setLoadingTracking(false);
     }
   };
-
-  const handleFulfillOrder = async () => {
-    if (!order.shippingAddress) {
-      setFulfillmentError("Cannot fulfill: No shipping address provided.");
-      return;
-    }
-    setFulfilling(true);
-    setFulfillmentError(null);
-    try {
-      const productTitles = order.lineItems?.edges?.map((e: any) => e.node.title).join(", ") || "";
-      const res = await fetch("/api/orders/fulfill", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          orderId: order.id,
-          orderName: order.name,
-          customerName: `${order.shippingAddress.firstName} ${order.shippingAddress.lastName || ""}`.trim(),
-          phone: order.shippingAddress.phone || order.customer?.phone || "",
-          address1: order.shippingAddress.address1,
-          address2: order.shippingAddress.address2 || "",
-          city: order.shippingAddress.city,
-          province: order.shippingAddress.province,
-          zip: order.shippingAddress.zip,
-          weight: manualWeight,
-          length: manualLength,
-          width: manualWidth,
-          height: manualHeight,
-          packageDesc: productTitles,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setFulfillmentError(data.error || "Failed to fulfill order.");
-      } else {
-        if (data.awb) {
-          localStorage.setItem(`awb_cache_${order.id}`, data.awb);
-        }
-        alert(data.message || "Order successfully booked and marked as fulfilled!");
-        window.location.reload();
-      }
-    } catch {
-      setFulfillmentError("Network error. Could not book shipment.");
-    } finally {
-      setFulfilling(false);
-    }
-  };
-
 
   useEffect(() => {
     fetchTrackingData();
@@ -224,10 +142,13 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
   }) || [];
 
   const totalRetail = parseFloat(order.totalPriceSet?.presentmentMoney?.amount || "0");
-  // Margin: Net Profit = Retail Revenue - Weaver Costs - Exact Shipping Cost
-  const netProfit = totalRetail - totalOrderCost - exactShippingCharged;
+  const shippingDeduction = actualCourierCostFromNote !== null ? actualCourierCostFromNote : 0;
+  
+  // Margin: Net Profit = Retail Revenue - Weaver Costs - Actual Courier Cost
+  const netProfit = totalRetail - totalOrderCost - shippingDeduction;
   const overallMargin = totalRetail > 0 ? (netProfit / totalRetail) * 100 : 0;
-  // Gross profit ignoring shipping (product profit only)
+  
+  // Gross profit ignoring shipping
   const grossProductProfit = totalRetail - totalOrderCost;
   const grossProductMargin = totalRetail > 0 ? (grossProductProfit / totalRetail) * 100 : 0;
 
@@ -369,15 +290,86 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
             </div>
           </div>
 
-          {/* Logistics & Tracking (Delhivery / Shiprocket) — PUSHED TO TOP */}
+          {/* Saree Line Items — MOVED TO TOP OF LOGISTICS */}
           <div className="ui-card p-5 bg-white">
-            <div className="flex items-center justify-between border-b border-[#4A154B]/5 pb-2.5 mb-4">
-              <h3 className="text-xs font-bold uppercase text-[#4A154B] flex items-center gap-1.5">
-                <Truck size={14} className="text-[#D4AF37]" />
-                Logistics Tracking & Fulfillment
-              </h3>
-              
-              {awb && (
+            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/5 pb-2.5 flex items-center gap-1.5 mb-4">
+              <Package size={14} />
+              Ordered Items
+            </h3>
+            <div className="space-y-4">
+              {items.map((item: any, i: number) => (
+                <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-[#1A1A1A]/5 last:border-b-0 last:pb-0">
+                  <div>
+                    <h4 className="text-xs font-bold text-[#1A1A1A]">{item.title}</h4>
+                    <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-1">SKU: {item.sku || "N/A"} | Qty: {item.qty}</p>
+                    {item.privateNotes && (
+                      <p className="text-[10px] bg-yellow-50 border border-yellow-200/50 text-[#D4AF37]/90 rounded px-2 py-1 mt-1.5 italic max-w-md">
+                        <strong>Note:</strong> {item.privateNotes}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="text-right flex items-center gap-4">
+                    <div className="text-xs">
+                      <p className="text-[#1A1A1A]/50">Retail: <span className="font-semibold text-[#1A1A1A]">₹{item.price.toLocaleString("en-IN")}</span></p>
+                      <p className="text-[#1A1A1A]/50 mt-0.5">Weaver: <span className="font-semibold text-[#1A1A1A]">₹{item.costPrice.toLocaleString("en-IN")}</span></p>
+                    </div>
+                    
+                    <span className={`text-[10px] font-bold rounded-lg px-2.5 py-1 ${getMarginColor(item.margin)}`}>
+                       +{Math.round(item.margin)}% Margin
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Secure Cost Margins (Founder's Eyes Only) */}
+          <div className="ui-card p-5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-2xl relative overflow-hidden">
+            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/10 pb-2.5 flex items-center gap-1.5">
+              <TrendingUp size={14} className="text-[#D4AF37]" />
+              Private Net Margin Metrics
+            </h3>
+            <div className="grid grid-cols-4 gap-4 mt-4">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Order Value</span>
+                <p className="text-base font-display font-bold text-[#4A154B] mt-0.5">₹{totalRetail.toLocaleString("en-IN")}</p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Weaver Cost</span>
+                <p className="text-base font-display font-bold text-[#4A154B] mt-0.5">₹{totalOrderCost.toLocaleString("en-IN")}</p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Actual Courier Cost</span>
+                <p className="text-base font-display font-bold text-rose-700 mt-0.5">
+                  ₹{shippingDeduction.toLocaleString("en-IN")}
+                </p>
+              </div>
+              <div>
+                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Net Profit</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className="text-base font-display font-bold text-green-700">₹{netProfit.toLocaleString("en-IN")}</span>
+                  <span className={`text-[9px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(overallMargin)}`}>
+                    {Math.round(overallMargin)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="absolute -right-6 -bottom-6 text-[#4A154B] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
+              ₹
+            </div>
+          </div>
+
+          {/* Logistics & Tracking (Delhivery / Shiprocket) */}
+          {awb && (
+            <div className="ui-card p-5 bg-white">
+              <div className="flex items-center justify-between border-b border-[#4A154B]/5 pb-2.5 mb-4">
+                <h3 className="text-xs font-bold uppercase text-[#4A154B] flex items-center gap-1.5">
+                  <Truck size={14} className="text-[#D4AF37]" />
+                  Logistics Tracking & Fulfillment
+                </h3>
+                
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-[11px] font-bold text-[#4A154B] bg-[#4A154B]/5 px-1.5 py-0.5 rounded">
                     AWB: {awb}
@@ -386,12 +378,6 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                     href={`/api/orders/packing-slip?awb=${awb}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => {
-                      if (typeof window !== "undefined") {
-                        localStorage.setItem(`downloaded_label_${order.id}`, "true");
-                        setLabelDownloaded(true);
-                      }
-                    }}
                     className="inline-flex items-center gap-1.5 text-[10px] font-bold text-white bg-[#4A154B] hover:bg-[#4A154B]/95 px-2.5 py-1.5 rounded-md transition-all no-underline"
                   >
                     Download Label
@@ -405,28 +391,8 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                     <RefreshCw size={12} className={loadingTracking ? "animate-spin" : ""} />
                   </button>
                 </div>
-              )}
-            </div>
+              </div>
 
-            {/* Parse courier selected tag */}
-            {(() => {
-              const courierTag = order.tags?.find((tag: string) => tag.toLowerCase().startsWith("courier:"));
-              const preferredCourier = courierTag ? courierTag.split(":")[1]?.trim() : null;
-              
-              if (preferredCourier && !awb) {
-                return (
-                  <div className="mb-4 p-2.5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-xl flex items-center justify-between text-xs">
-                    <span className="font-semibold text-[#4A154B]">Customer Selected Delivery:</span>
-                    <span className="bg-[#4A154B] text-white font-bold px-2 py-0.5 rounded-lg text-[10px] uppercase">
-                      {preferredCourier}
-                    </span>
-                  </div>
-                );
-              }
-              return null;
-            })()}
-
-            {awb ? (
               <div className="space-y-5">
                 {/* Status Display */}
                 {loadingTracking ? (
@@ -475,267 +441,9 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                     Awaiting courier manifestation.
                   </div>
                 )}
-
-                {/* Delhivery Pickup Scheduling Section */}
-                <div className="border-t border-[#4A154B]/10 pt-4 space-y-3">
-                  <h4 className="text-[11px] uppercase font-bold text-[#4A154B] tracking-wider flex items-center gap-1.5">
-                    <Calendar size={12} className="text-[#D4AF37]" />
-                    Delhivery Pickup Scheduling
-                  </h4>
-
-                  {pickupId ? (
-                    <div className="p-3 bg-green-50 text-green-700 rounded-xl border border-green-200 text-xs space-y-1">
-                      <p className="font-bold flex items-center gap-1">
-                        <CheckCircle2 size={14} />
-                        Pickup Successfully Scheduled!
-                      </p>
-                      <p className="text-[10px] text-green-800">
-                        Pickup ID: <strong className="font-bold">{pickupId}</strong>
-                      </p>
-                      <p className="text-[10px] text-green-800">
-                        Date/Slot: <strong>{scheduledPickupDate}</strong> ({scheduledPickupTime === "10:00:00" ? "Morning Slot: 10 AM - 1 PM" : "Afternoon Slot: 2 PM - 5 PM"})
-                      </p>
-                      <div className="mt-2 p-2 bg-amber-50 text-amber-900 rounded-lg border border-amber-200 text-[10px] leading-relaxed">
-                        📌 <strong>Packing Deadline:</strong> Please ensure the shipping label is printed and pasted onto the package before <strong>{scheduledPickupTime === "10:00:00" ? "09:30 AM" : "01:30 PM"} on {scheduledPickupDate}</strong>.
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-3 bg-amber-50/50 text-amber-900/80 rounded-xl border border-amber-200/40 text-[10px] leading-relaxed">
-                      📦 Manifested shipment is queued. You can schedule or manage daily pickup runs for this package from the main dashboard coordinator panel.
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : (
-              /* Fulfillment Fulfill actions */
-              <div className="space-y-4 text-xs">
-                <p className="text-[#1A1A1A]/60 text-[11px]">
-                  This order has not been fulfilled yet. Enter dimensions and weight to register the box with Delhivery and fulfill the order on Shopify.
-                </p>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2 flex flex-col gap-1">
-                    <label className="text-[10px] uppercase font-bold text-[#4A154B] tracking-wider">
-                      Package Weight (kg)
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        value={manualWeight}
-                        onChange={(e) => setManualWeight(e.target.value)}
-                        className="w-24 h-9 rounded-lg border border-[#4A154B]/10 px-2.5 bg-white text-xs outline-none focus:border-[#4A154B]"
-                      />
-                      <span className="text-[11px] text-[#1A1A1A]/50">kg (e.g. 0.5 for regular saree box)</span>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase font-bold text-[#4A154B] tracking-wider">Length (cm)</label>
-                    <input
-                      type="number"
-                      value={manualLength}
-                      onChange={(e) => setManualLength(e.target.value)}
-                      className="h-9 rounded-lg border border-[#4A154B]/10 px-2.5 bg-white text-xs outline-none focus:border-[#4A154B]"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase font-bold text-[#4A154B] tracking-wider">Width (cm)</label>
-                    <input
-                      type="number"
-                      value={manualWidth}
-                      onChange={(e) => setManualWidth(e.target.value)}
-                      className="h-9 rounded-lg border border-[#4A154B]/10 px-2.5 bg-white text-xs outline-none focus:border-[#4A154B]"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] uppercase font-bold text-[#4A154B] tracking-wider">Height (cm)</label>
-                    <input
-                      type="number"
-                      value={manualHeight}
-                      onChange={(e) => setManualHeight(e.target.value)}
-                      className="h-9 rounded-lg border border-[#4A154B]/10 px-2.5 bg-white text-xs outline-none focus:border-[#4A154B]"
-                    />
-                  </div>
-                </div>
-
-                {fulfillmentError && (
-                  <div className="p-3 bg-red-50 text-red-700 rounded-xl border border-red-200">
-                    {fulfillmentError}
-                  </div>
-                )}
-                
-                <button
-                  type="button"
-                  disabled={fulfilling || !order.shippingAddress}
-                  onClick={handleFulfillOrder}
-                  className="w-full inline-flex items-center justify-center gap-2 bg-[#4A154B] hover:bg-[#4A154B]/90 text-white font-bold py-3.5 px-4 rounded-xl shadow-md transition disabled:opacity-50 cursor-pointer text-xs uppercase tracking-wider"
-                >
-                  <Truck size={14} />
-                  {fulfilling ? "Processing with Delhivery..." : "Fulfill & Manifest with Delhivery"}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Shipping Cost Breakdown (CRM Admin View) */}
-          <div className="ui-card p-5 bg-white border-2 border-[#D4AF37]/30">
-            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/5 pb-2.5 flex items-center gap-1.5">
-              <Truck size={14} className="text-[#D4AF37]" />
-              Shipping Cost Breakdown
-            </h3>
-            <div className="mt-4 grid grid-cols-2 gap-4 text-xs">
-              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Shipping Speed</span>
-                <p className="font-bold text-sm mt-1 text-[#4A154B] capitalize">
-                  {shippingSpeedFromTag || (exactShippingCharged === 0 ? "Standard" : "Express")}
-                </p>
-                {shippingNoteLabel && (
-                  <p className="text-[10px] text-[#1A1A1A]/50 mt-0.5">{shippingNoteLabel}</p>
-                )}
-              </div>
-              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Courier Partner</span>
-                <p className="font-bold text-sm mt-1 text-[#4A154B]">
-                  {courierNameFromTag || "Delhivery"}
-                </p>
-              </div>
-              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Charged to Customer</span>
-                <p className={`font-bold text-sm mt-1 ${exactShippingCharged === 0 ? "text-green-700" : "text-[#4A154B]"}`}>
-                  {exactShippingCharged === 0 ? "Free" : `₹${exactShippingCharged.toLocaleString("en-IN")}`}
-                </p>
-              </div>
-              <div className="p-3 bg-[#FAF8F5] rounded-lg border border-[#4A154B]/5">
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55 block">Actual Courier Cost</span>
-                {actualCourierCostFromNote !== null ? (
-                  <>
-                    <p className="font-bold text-sm mt-1 text-rose-700">
-                      ₹{actualCourierCostFromNote.toLocaleString("en-IN")}
-                    </p>
-                    <p className="text-[10px] text-[#1A1A1A]/50 mt-0.5">
-                      {exactShippingCharged === 0 ? "Absorbed by store (free offer)" : "Collected from customer"}
-                    </p>
-                  </>
-                ) : (
-                  <p className="font-bold text-sm mt-1 text-[#1A1A1A]/40">
-                    {exactShippingCharged === 0
-                      ? <span className="text-[11px] text-[#1A1A1A]/50 font-normal">Free offer — check courier invoice</span>
-                      : `₹${exactShippingCharged.toLocaleString("en-IN")}`
-                    }
-                  </p>
-                )}
               </div>
             </div>
-
-            {/* Margin impact note */}
-            <div className="mt-3 p-3 bg-amber-50 border border-amber-200/60 rounded-xl text-[11px] text-amber-900 font-medium">
-              {actualCourierCostFromNote !== null && exactShippingCharged === 0 ? (
-                <>⚠️ Standard shipping is <strong>free to the customer</strong>. Actual courier cost: <strong>₹{actualCourierCostFromNote.toLocaleString("en-IN")}</strong> ({courierNameFromTag || "Delhivery"}) — absorbed as a store expense, reducing net margin accordingly.</>
-              ) : (
-                <>⚠️ Standard shipping is offered <strong>free to customers</strong>. The actual courier cost ({courierNameFromTag || "Delhivery"} Standard) is absorbed as a business expense and will reduce your net margin by the actual courier invoice amount.</>
-              )}
-            </div>
-          </div>
-
-          {/* Secure Cost Margins (Founder's Eyes Only) */}
-          <div className="ui-card p-5 bg-[#4A154B]/5 border border-[#4A154B]/10 rounded-2xl relative overflow-hidden">
-            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/10 pb-2.5 flex items-center gap-1.5">
-              <TrendingUp size={14} className="text-[#D4AF37]" />
-              Private Net Margin Metrics
-            </h3>
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Order Value</span>
-                <p className="text-lg font-display font-bold text-[#4A154B] mt-0.5">₹{totalRetail.toLocaleString("en-IN")}</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Weaver Cost</span>
-                <p className="text-lg font-display font-bold text-[#4A154B] mt-0.5">₹{totalOrderCost.toLocaleString("en-IN")}</p>
-              </div>
-              <div>
-                <span className="text-[10px] uppercase font-bold text-[#1A1A1A]/55">Gross Product Profit</span>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-base font-display font-bold text-green-700">₹{grossProductProfit.toLocaleString("en-IN")}</span>
-                  <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(grossProductMargin)}`}>
-                    {Math.round(grossProductMargin)}%
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Shipping deduction row */}
-            {exactShippingCharged === 0 && (
-              <div className="mt-3 pt-3 border-t border-[#4A154B]/10">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[#1A1A1A]/60 font-semibold">Shipping (Free to Customer — Cost Absorbed):</span>
-                  <span className="font-bold text-rose-600">-₹ (see courier invoice)</span>
-                </div>
-                <div className="flex items-center justify-between text-xs mt-2">
-                  <span className="text-[#1A1A1A]/60 font-semibold">Net Profit After Shipping:</span>
-                  <span className="font-bold text-[#4A154B]">See courier bill for exact net</span>
-                </div>
-              </div>
-            )}
-            {exactShippingCharged > 0 && (
-              <div className="mt-3 pt-3 border-t border-[#4A154B]/10">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[#1A1A1A]/60 font-semibold">Shipping Collected from Customer:</span>
-                  <span className="font-bold text-green-700">+₹{exactShippingCharged.toLocaleString("en-IN")}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs mt-1.5">
-                  <span className="font-bold text-[#1A1A1A]">Net Profit (incl. shipping):</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg font-display font-bold text-green-700">₹{netProfit.toLocaleString("en-IN")}</span>
-                    <span className={`text-[10px] font-bold rounded-lg px-2 py-0.5 ${getMarginColor(overallMargin)}`}>
-                      {Math.round(overallMargin)}%
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="absolute -right-6 -bottom-6 text-[#4A154B] opacity-5 font-bold font-display text-7xl select-none pointer-events-none">
-              ₹
-            </div>
-          </div>
-
-          {/* Saree Line Items */}
-          <div className="ui-card p-5 bg-white">
-            <h3 className="text-xs font-bold uppercase text-[#4A154B] border-b border-[#4A154B]/5 pb-2.5 flex items-center gap-1.5 mb-4">
-              <Package size={14} />
-              Ordered Items
-            </h3>
-            <div className="space-y-4">
-              {items.map((item: any, i: number) => (
-                <div key={i} className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-3 border-b border-[#1A1A1A]/5 last:border-b-0 last:pb-0">
-                  <div>
-                    <h4 className="text-xs font-bold text-[#1A1A1A]">{item.title}</h4>
-                    <p className="text-[10px] font-mono text-[#1A1A1A]/50 mt-1">SKU: {item.sku || "N/A"} | Qty: {item.qty}</p>
-                    {item.privateNotes && (
-                      <p className="text-[10px] bg-yellow-50 border border-yellow-200/50 text-[#D4AF37]/90 rounded px-2 py-1 mt-1.5 italic max-w-md">
-                        <strong>Note:</strong> {item.privateNotes}
-                      </p>
-                    )}
-                  </div>
-                  
-                  <div className="text-right flex items-center gap-4">
-                    <div className="text-xs">
-                      <p className="text-[#1A1A1A]/50">Retail: <span className="font-semibold text-[#1A1A1A]">₹{item.price.toLocaleString("en-IN")}</span></p>
-                      <p className="text-[#1A1A1A]/50 mt-0.5">Weaver: <span className="font-semibold text-[#1A1A1A]">₹{item.costPrice.toLocaleString("en-IN")}</span></p>
-                    </div>
-                    
-                    <span className={`text-[10px] font-bold rounded-lg px-2.5 py-1 ${getMarginColor(item.margin)}`}>
-                       +{Math.round(item.margin)}% Margin
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* Secure Payment details (Razorpay) */}
           <div className="ui-card p-4 bg-white">
