@@ -102,10 +102,10 @@ export default function ProductsPage() {
   return (
     <div className="flex min-h-screen bg-[#FAF8F5]">
       <Sidebar />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-screen">
         <Header title="Saree Inventory Grid" />
         
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1360px] mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-8 pb-24 max-w-[1360px] mx-auto w-full">
           <section className={styles.inventoryPage} style={{ background: 'transparent', padding: 0 }}>
             <CategoryTabs collections={collections.map(c => c.title)} selected={selectedCollection} onSelect={setSelectedCollection} />
             <FilterBar onChange={setFilters} availableColours={colours} availableFabrics={fabrics} />

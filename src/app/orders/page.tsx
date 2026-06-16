@@ -38,10 +38,10 @@ export default async function OrdersDashboardPage() {
       <Sidebar />
 
       {/* Main Workspace Panel */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-screen">
         <Header title="Customer Orders & Operations" />
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-[1360px] mx-auto w-full">
+        <main className="flex-1 p-4 sm:p-8 pb-24 max-w-[1360px] mx-auto w-full">
           <OrdersListTable initialOrders={orders} metaMap={metaMap} />
         </main>
       </div>
