@@ -1269,7 +1269,7 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
                             }
 
                             if (inlineAwb) {
-                              return <LogisticsStatusBadge awb={inlineAwb} />;
+                              return <LogisticsStatusBadge awb={inlineAwb} courier={getOrderCourierPartner(order)} />;
                             }
                             return null;
                           })()}
@@ -1392,13 +1392,13 @@ export default function OrdersListTable({ initialOrders, metaMap }: OrdersListTa
 
 // Inline lazy-loaded dynamic tracking status component
 import { useEffect as reactUseEffect } from "react";
-function LogisticsStatusBadge({ awb }: { awb: string }) {
+function LogisticsStatusBadge({ awb, courier }: { awb: string, courier?: string }) {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   reactUseEffect(() => {
     let active = true;
-    fetch(`/api/orders/track?awb=${encodeURIComponent(awb)}`)
+    fetch(`/api/orders/track?awb=${encodeURIComponent(awb)}&courier=${encodeURIComponent(courier || "")}`)
       .then((res) => res.json())
       .then((data) => {
         if (active && data?.ok && data?.tracking?.status) {
@@ -1413,7 +1413,7 @@ function LogisticsStatusBadge({ awb }: { awb: string }) {
     return () => {
       active = false;
     };
-  }, [awb]);
+  }, [awb, courier]);
 
   if (loading) {
     return <span className="text-[9px] text-[#1A1A1A]/40 animate-pulse">Checking status...</span>;
