@@ -1194,7 +1194,7 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
                                 <div className="flex justify-end gap-2 items-center">
                                   {awb && (
                                     <a
-                                      href={`https://parcelsapp.com/en/tracking/${awb}`}
+                                      href={`https://www.ship24.com/tracking?p=${awb}`}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="px-2.5 py-1 bg-[#4A154B] hover:bg-[#4A154B]/90 text-white rounded text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer no-underline"
