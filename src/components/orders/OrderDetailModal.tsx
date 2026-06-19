@@ -37,7 +37,9 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
   const initialDeliveryStatus = deliveryStatusAttr ? deliveryStatusAttr.value : (order.tags?.includes("delivery_status:delivered") ? "delivered" : "dispatched");
   const [currentDeliveryStatus, setCurrentDeliveryStatus] = useState(initialDeliveryStatus);
   const [markingDelivered, setMarkingDelivered] = useState(false);
-  const isManualFulfillment = order.customAttributes?.some((attr: any) => attr.key.toLowerCase() === "courier_partner") || order.tags?.some((t: string) => t.toLowerCase().startsWith("courier:"));
+  const pickupIdAttr = order.customAttributes?.find((attr: any) => attr.key.toLowerCase() === "pickup_id");
+  const hasManualIndicators = order.customAttributes?.some((attr: any) => attr.key.toLowerCase() === "courier_partner") || order.tags?.some((t: string) => t.toLowerCase().startsWith("courier:"));
+  const isManualFulfillment = !pickupIdAttr && hasManualIndicators;
 
   const getOrderCourierPartner = (order: any) => {
     const courierAttr = order.customAttributes?.find(
@@ -503,7 +505,7 @@ export default function OrderDetailModal({ order, metaMap, onClose }: OrderDetai
                   </div>
                 )}
 
-                {currentDeliveryStatus !== "delivered" && (
+                {isManualFulfillment && currentDeliveryStatus !== "delivered" && (
                   <div className="mt-4 pt-4 border-t border-[#4A154B]/5 flex justify-end">
                     <button
                       type="button"

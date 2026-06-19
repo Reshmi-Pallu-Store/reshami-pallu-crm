@@ -910,46 +910,6 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
           )}
         </div>
 
-        {/* Warning Alert if there are unscheduled manifested orders while a pickup is active */}
-        {scheduledPickups.length > 0 && manifestedAwaitingPickup.length > 0 && (
-          <div className="p-3.5 bg-amber-50 border border-amber-200/70 rounded-xl space-y-2 text-xs text-amber-900">
-            <p className="font-bold flex items-center gap-1.5 text-amber-800">
-              ⚠️ {manifestedAwaitingPickup.length} Manifested Package(s) Awaiting Pickup
-            </p>
-            <p className="text-[10px] text-amber-800/80 leading-relaxed font-semibold">
-              Delhivery does not allow adding new packages to an already scheduled pickup ID. You must either cancel the current pickup request to schedule a fresh one for all packages, or schedule a separate run.
-            </p>
-            <div className="flex gap-2 pt-1 font-bold">
-              <button
-                type="button"
-                onClick={() => {
-                  const sp = scheduledPickups[0];
-                  if (sp) {
-                    handleCancelPickup(sp.id, sp.orders);
-                  }
-                }}
-                className="px-2.5 py-1.5 rounded-lg text-[9px] uppercase bg-amber-600 hover:bg-amber-700 text-white transition-all cursor-pointer shadow-sm"
-              >
-                Cancel Current & Reschedule All
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowScheduler(true);
-                  if (availableDays.length > 1) {
-                    setPickupDate(availableDays[1].date);
-                    if (availableDays[1].slots.length > 0) {
-                      setPickupTime(availableDays[1].slots[0].value);
-                    }
-                  }
-                }}
-                className="px-2.5 py-1.5 rounded-lg text-[9px] uppercase bg-[#4A154B] hover:bg-[#4A154B]/90 text-white transition-all cursor-pointer shadow-sm"
-              >
-                Schedule Next Day / Separate Run
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Scheduled Pickups Status */}
         {scheduledPickups.length > 0 ? (
@@ -1078,6 +1038,7 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
                   <tr className="border-b border-[#4A154B]/5 bg-[#FAF8F5] text-[9px] uppercase font-bold text-[#1A1A1A]/55">
                     <th className="py-2.5 px-3">Order</th>
                     <th className="py-2.5 px-3">AWB / Tracking ID</th>
+                    <th className="py-2.5 px-3">Shipping Status</th>
                     <th className="py-2.5 px-3">Pickup Status</th>
                     <th className="py-2.5 px-3 text-right">Actions</th>
                   </tr>
@@ -1088,7 +1049,10 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
                     const pickup = getOrderPickupDetails(order);
                     const deliveryStatusAttr = order.customAttributes?.find((attr: any) => attr.key.toLowerCase() === "delivery_status");
                     const deliveryStatus = deliveryStatusAttr?.value || (order.tags?.includes("delivery_status:delivered") ? "delivered" : "dispatched");
-                    const isManualFulfillment = order.customAttributes?.some((attr: any) => attr.key.toLowerCase() === "courier_partner") || order.tags?.some((t: string) => t.toLowerCase().startsWith("courier:"));
+                    
+                    // If an order has a pickup scheduled, it is definitely an automated Delhivery fulfillment
+                    const hasManualIndicators = order.customAttributes?.some((attr: any) => attr.key.toLowerCase() === "courier_partner") || order.tags?.some((t: string) => t.toLowerCase().startsWith("courier:"));
+                    const isManualFulfillment = !pickup && hasManualIndicators;
 
                     return (
                       <tr key={order.id} className="hover:bg-[#FAF8F5]/30">
@@ -1165,6 +1129,15 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
                                 </button>
                               )}
                             </div>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-3">
+                          {isManualFulfillment ? (
+                            <span className="inline-block text-[9px] font-bold uppercase rounded px-1.5 py-0.5 border bg-purple-50 text-purple-700 border-purple-200">
+                              {deliveryStatus === "delivered" ? "Delivered" : "Dispatched"}
+                            </span>
+                          ) : (
+                            awb ? <LogisticsStatusBadge awb={awb} courier={getOrderCourierPartner(order)} /> : <span className="text-[9px] text-[#1A1A1A]/40">Awaiting AWB</span>
                           )}
                         </td>
                         <td className="py-2.5 px-3">
