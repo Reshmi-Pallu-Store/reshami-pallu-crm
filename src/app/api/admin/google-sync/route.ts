@@ -604,6 +604,7 @@ export async function POST(req: NextRequest) {
               const promptText = `Put this exact saree on the same elegant, professional Indian model named Maya, featuring a consistent beautiful face with symmetric facial features and identical soft smile across all shots, with a professional ${modelTone} skin tone, wearing a custom-tailored matching saree blouse that perfectly coordinates in color, design, and pattern with the saree, and draped elegantly in this exact saree, standing in a luxurious ${backgroundVibe} setting. Strictly preserve all original patterns, colors, textures, borders, and print details. Camera: ${poseConfig.desc}. Return the final generated model image directly as an image asset.`;
 
               try {
+                console.log(`  [AI Generation] Requesting gemini-3.1-flash-image for pose: ${poseConfig.pose}...`);
                 const imgRes = await fetch(geminiImageUrl, {
                   method: "POST",
                   headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -619,37 +620,60 @@ export async function POST(req: NextRequest) {
                     modelGeneratedBytes = bytes;
                     apiSuccess = true;
                     generatedByGemini = true;
+                    console.log(`  ✓ [AI Generation] gemini-3.1-flash-image generated successfully for ${poseConfig.pose}.`);
+                  } else {
+                    console.warn(`  ⚠️ [AI Generation] gemini-3.1-flash-image succeeded but did not return image bytes.`);
                   }
+                } else {
+                  const errText = await imgRes.text();
+                  console.error(`  [AI Generation] gemini-3.1-flash-image failed with status ${imgRes.status}:`, errText);
                 }
-              } catch (err) {}
+              } catch (err: any) {
+                console.error(`  [AI Generation] gemini-3.1-flash-image exception:`, err.message || err);
+              }
 
               // Imagen Fallback
               if (!apiSuccess) {
                 const poseDescription = `A professional Indian model named Maya, consistent face, soft smile, ${modelTone} skin tone, wearing a custom blouse, draped in the exact saree from the reference image. She is standing in a luxurious ${backgroundVibe} setting. Pose: ${poseConfig.desc}.`;
-                const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-ultra-generate-001:predict?key=${apiKey}`;
+                const fallbackModels = ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"];
 
-                try {
-                  const imagenRes = await fetch(imagenUrl, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      instances: [{
-                        prompt: poseDescription,
-                        imagePrompt: { image: { imageBytes: primaryImageBase64 } }
-                      }],
-                      parameters: { sampleCount: 1, outputMimeType: "image/jpeg", aspectRatio: "3:4" }
-                    })
-                  });
+                for (const modelName of fallbackModels) {
+                  const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${apiKey}`;
+                  console.log(`  [AI Generation] Falling back to standard Imagen: ${modelName} for pose: ${poseConfig.pose}...`);
 
-                  if (imagenRes.ok) {
-                    const imagenData = await imagenRes.json();
-                    const bytes = imagenData.predictions?.[0]?.bytesBase64Encoded || imagenData.generatedImages?.[0]?.image?.imageBytes;
-                    if (bytes) {
-                      modelGeneratedBytes = bytes;
-                      apiSuccess = true;
+                  try {
+                    const imagenRes = await fetch(imagenUrl, {
+                      method: "POST",
+                      headers: { 
+                        "Content-Type": "application/json",
+                        "x-goog-api-key": apiKey 
+                      },
+                      body: JSON.stringify({
+                        instances: [{
+                          prompt: poseDescription,
+                          imagePrompt: { image: { imageBytes: primaryImageBase64 } }
+                        }],
+                        parameters: { sampleCount: 1, outputMimeType: "image/jpeg", aspectRatio: "3:4" }
+                      })
+                    });
+
+                    if (imagenRes.ok) {
+                      const imagenData = await imagenRes.json();
+                      const bytes = imagenData.predictions?.[0]?.bytesBase64Encoded || imagenData.generatedImages?.[0]?.image?.imageBytes;
+                      if (bytes) {
+                        modelGeneratedBytes = bytes;
+                        apiSuccess = true;
+                        console.log(`  ✓ [AI Generation] Fallback ${modelName} generated successfully for ${poseConfig.pose}.`);
+                        break;
+                      }
+                    } else {
+                      const errText = await imagenRes.text();
+                      console.error(`  [AI Generation] Fallback ${modelName} failed with status ${imagenRes.status}:`, errText);
                     }
+                  } catch (err: any) {
+                    console.error(`  [AI Generation] Fallback ${modelName} exception:`, err.message || err);
                   }
-                } catch (err) {}
+                }
               }
 
               if (apiSuccess && modelGeneratedBytes) {
@@ -664,6 +688,8 @@ export async function POST(req: NextRequest) {
                 }
                 fs.writeFileSync(finalLocalPath, finalImageBuffer);
                 await new Promise(resolve => setTimeout(resolve, 1000));
+              } else {
+                console.error(`  ❌ [AI Generation] All generation attempts failed for pose: ${poseConfig.pose}. Saree will be uploaded without model try-on photos.`);
               }
             }
           }
