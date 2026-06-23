@@ -248,7 +248,7 @@ export async function POST(req: NextRequest) {
         
         const payload = {
           title: cleanTitle,
-          handle: "",
+          handle: sku.toLowerCase().trim(),
           descriptionHtml: `<p>${(item['description'] || item['descriptionoptional'] || '').replace(/\n/g, "<br />")}</p>`,
           status: (item['status'] || 'ACTIVE').toUpperCase() as any,
           price: reportItem.price,

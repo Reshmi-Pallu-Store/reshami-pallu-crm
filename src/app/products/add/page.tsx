@@ -513,6 +513,7 @@ export default function AddProductPage() {
         costPrice: parseFloat(costPrice || "0"),
         stock: parseInt(stock || "0"),
         sku,
+        handle: sku.toLowerCase().trim(),
         tags,
         images: finalImages,
         metafields: {

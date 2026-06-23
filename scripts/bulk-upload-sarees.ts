@@ -487,7 +487,7 @@ async function runBulkUpload() {
             }
           }
         `,
-        variables: { query: `title:'${toTitleCase(title).replace(/'/g, "\\'")}' OR sku:${sku}` }
+        variables: { query: `sku:${sku}` }
       });
 
       const edges = checkRes.products?.edges || [];
@@ -684,7 +684,7 @@ async function runBulkUpload() {
       
       const payload = {
         title: cleanTitle,
-        handle: "",
+        handle: sku.toLowerCase().trim(),
         descriptionHtml: `<p>${(item['description'] || item['descriptionoptional'] || '').replace(/\n/g, "<br />")}</p>`,
         status: (item['status'] || 'ACTIVE').toUpperCase() as any,
         price: reportItem.price,

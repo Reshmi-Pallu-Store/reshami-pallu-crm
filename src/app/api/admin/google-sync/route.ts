@@ -359,9 +359,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Google Sheet URL and Google Drive URL are required." }, { status: 400 });
     }
 
-    const apiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ error: "Google API Key / GEMINI_API_KEY is not configured in .env.local" }, { status: 500 });
+    const googleApiKey = process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY;
+    const geminiApiKey = process.env.GEMINI_API_KEY;
+    if (!googleApiKey) {
+      return NextResponse.json({ error: "Google API Key is not configured in .env.local" }, { status: 500 });
+    }
+    if (!geminiApiKey) {
+      return NextResponse.json({ error: "GEMINI_API_KEY is not configured in .env.local" }, { status: 500 });
     }
 
     const sheetId = extractSpreadsheetId(sheetUrl);
@@ -417,7 +421,7 @@ export async function POST(req: NextRequest) {
     await db.set("google-sync:progress", { step: 2, text: "Mapping serial numbers to Google Drive...", status: "active", log: "Fetching folder lists from parent Google Drive folder..." });
     const listFoldersUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
       `'${driveId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
-    )}&key=${apiKey}&fields=files(id,name)&pageSize=1000`;
+    )}&key=${googleApiKey}&fields=files(id,name)&pageSize=1000`;
 
     const driveFolderRes = await fetch(listFoldersUrl, { cache: "no-store" });
     if (!driveFolderRes.ok) {
@@ -487,7 +491,7 @@ export async function POST(req: NextRequest) {
               }
             }
           `,
-          variables: { query: `title:'${title.replace(/'/g, "\\'")}' OR sku:${sku}` }
+          variables: { query: `sku:${sku}` }
         });
         const edges = checkRes.products?.edges || [];
         if (edges.length > 0) {
@@ -503,7 +507,7 @@ export async function POST(req: NextRequest) {
           // Verify if there are images inside this subfolder
           const listImagesUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
             `'${subfolderId}' in parents and trashed = false and mimeType contains 'image/'`
-          )}&key=${apiKey}&fields=files(id,name,mimeType)&pageSize=5`;
+          )}&key=${googleApiKey}&fields=files(id,name,mimeType)&pageSize=5`;
           
           const imgListRes = await fetch(listImagesUrl, { cache: "no-store" });
           if (imgListRes.ok) {
@@ -560,7 +564,7 @@ export async function POST(req: NextRequest) {
         // Download images from subfolder
         const listImagesUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(
           `'${subfolderId}' in parents and trashed = false and mimeType contains 'image/'`
-        )}&key=${apiKey}&fields=files(id,name,mimeType)&orderBy=name&pageSize=1000`;
+        )}&key=${googleApiKey}&fields=files(id,name,mimeType)&orderBy=name&pageSize=1000`;
 
         const imgListRes = await fetch(listImagesUrl, { cache: "no-store" });
         if (!imgListRes.ok) {
@@ -573,7 +577,7 @@ export async function POST(req: NextRequest) {
           const localPath = path.join(itemMediaDir, file.name);
           if (!fs.existsSync(localPath)) {
             console.log(`  Downloading raw image ${file.name} to local folder...`);
-            const dlUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${apiKey}`;
+            const dlUrl = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&key=${googleApiKey}`;
             const dlRes = await fetch(dlUrl, { cache: "no-store" });
             if (dlRes.ok) {
               const arrayBuffer = await dlRes.arrayBuffer();
@@ -609,7 +613,7 @@ export async function POST(req: NextRequest) {
           // Generate description if not present using Gemini
           if (!sareeDescription) {
             console.log(`  [AI Generation] Description is missing. Generating with Gemini...`);
-            const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${apiKey}`;
+            const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-pro:generateContent?key=${geminiApiKey}`;
             const analysisPrompt = `
               Analyze the uploaded saree photos showing different angles/details of the same saree. 
               Write a highly detailed, extremely precise description of this saree across all angles.
@@ -629,7 +633,7 @@ export async function POST(req: NextRequest) {
 
             const analysisRes = await fetch(geminiUrl, {
               method: "POST",
-              headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+              headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: analysisPrompt }, ...inputParts] }]
               })
@@ -668,14 +672,14 @@ export async function POST(req: NextRequest) {
               let generatedByGemini = false;
 
               // Gemini 3.1 Flash Image
-              const geminiImageUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`;
+              const geminiImageUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent?key=${geminiApiKey}`;
               const promptText = `Put this exact saree on the same elegant, professional Indian model named Maya, featuring a consistent beautiful face with symmetric facial features and identical soft smile across all shots, with a professional ${modelTone} skin tone, wearing a custom-tailored matching saree blouse that perfectly coordinates in color, design, and pattern with the saree, and draped elegantly in this exact saree, standing in a luxurious ${backgroundVibe} setting. Strictly preserve all original patterns, colors, textures, borders, and print details. Camera: ${poseConfig.desc}. Return the final generated model image directly as an image asset.`;
 
               try {
                 console.log(`  [AI Generation] Requesting gemini-3.1-flash-image for pose: ${poseConfig.pose}...`);
                 const imgRes = await fetch(geminiImageUrl, {
                   method: "POST",
-                  headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+                  headers: { "Content-Type": "application/json", "x-goog-api-key": geminiApiKey },
                   body: JSON.stringify({
                     contents: [{ parts: [{ text: promptText }, ...inputParts] }]
                   })
@@ -706,7 +710,7 @@ export async function POST(req: NextRequest) {
                 const fallbackModels = ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"];
 
                 for (const modelName of fallbackModels) {
-                  const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${apiKey}`;
+                  const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${geminiApiKey}`;
                   console.log(`  [AI Generation] Falling back to standard Imagen: ${modelName} for pose: ${poseConfig.pose}...`);
 
                   try {
@@ -714,7 +718,7 @@ export async function POST(req: NextRequest) {
                       method: "POST",
                       headers: { 
                         "Content-Type": "application/json",
-                        "x-goog-api-key": apiKey 
+                        "x-goog-api-key": geminiApiKey 
                       },
                       body: JSON.stringify({
                         instances: [{
@@ -847,7 +851,7 @@ export async function POST(req: NextRequest) {
         // Create Shopify listing
         const payload = {
           title: cleanTitle,
-          handle: "",
+          handle: sku.toLowerCase().trim(),
           descriptionHtml: `<p>${sareeDescription.replace(/\n/g, "<br />")}</p>`,
           status: (item['status'] || 'ACTIVE').toUpperCase() as any,
           price: reportItem.price,
