@@ -506,13 +506,22 @@ export default function BulkUploadPage() {
                   <p className="text-xs text-gray-500 mt-1">Audit log of Shopify creation requests, Weaver cost records, and Media CDN uploads.</p>
                 </div>
                 
-                <button
-                  onClick={downloadReportCSV}
-                  className="btn-secondary flex items-center gap-1.5 py-2 px-4 text-xs tracking-wider uppercase font-semibold text-center justify-center"
-                >
-                  <Download size={14} />
-                  Export Report (CSV)
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href="/api/admin/download-photos-zip?serialNumber=all"
+                    className="btn-secondary flex items-center gap-1.5 py-2 px-4 text-xs tracking-wider uppercase font-semibold text-center justify-center bg-[#4A154B]/5 hover:bg-[#4A154B]/10 text-[#4A154B] border-none"
+                  >
+                    <Download size={14} />
+                    Download All Photos (ZIP)
+                  </a>
+                  <button
+                    onClick={downloadReportCSV}
+                    className="btn-secondary flex items-center gap-1.5 py-2 px-4 text-xs tracking-wider uppercase font-semibold text-center justify-center"
+                  >
+                    <Download size={14} />
+                    Export Report (CSV)
+                  </button>
+                </div>
               </div>
 
               {/* Stats Counters */}
@@ -645,17 +654,27 @@ export default function BulkUploadPage() {
                             {item.status}
                           </span>
                         </td>
-                        <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                        <td className="px-4 py-3.5 text-right whitespace-nowrap space-x-2.5">
                           {item.status === "success" ? (
-                            <a
-                              href={`https://admin.shopify.com/store/reshmi-pallu/products/${item.shopifyId?.replace("gid://shopify/Product/", "")}`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-0.5 hover:underline font-semibold"
-                            >
-                              <span>Shopify</span>
-                              <ExternalLink size={10} />
-                            </a>
+                            <>
+                              <a
+                                href={`/api/admin/download-photos-zip?serialNumber=${item.serialNumber}`}
+                                className="text-[#4A154B] hover:text-[#3D113E] inline-flex items-center gap-0.5 hover:underline font-semibold"
+                              >
+                                <span>Download ZIP</span>
+                                <Download size={10} />
+                              </a>
+                              <span className="text-gray-300">|</span>
+                              <a
+                                href={`https://admin.shopify.com/store/reshmi-pallu/products/${item.shopifyId?.replace("gid://shopify/Product/", "")}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-0.5 hover:underline font-semibold"
+                              >
+                                <span>Shopify</span>
+                                <ExternalLink size={10} />
+                              </a>
+                            </>
                           ) : (
                             <span className="text-red-500 font-medium max-w-xs block truncate" title={item.error}>
                               {item.error}
