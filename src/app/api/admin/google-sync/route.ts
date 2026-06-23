@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import fs from "fs";
 import path from "path";
+import os from "os";
 import sharp from "sharp";
 import { shopifySaree, shopifyAdminFetch } from "@/lib/shopify";
 import { sareeDb } from "@/lib/db";
@@ -119,7 +120,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Invalid sheet URL" }, { status: 400 });
     }
 
-    const cachePath = path.resolve(process.cwd(), "data/google_sheet_cache.csv");
+    const cachePath = path.join(os.tmpdir(), "google_sheet_cache.csv");
     let csvContent = "";
     let fetched = false;
 
@@ -314,7 +315,7 @@ export async function POST(req: NextRequest) {
     console.log(`[Google Sync API] Starting sync. Sheet ID: ${sheetId}, Drive ID: ${driveId}`);
 
     // 1. Fetch Google Sheet CSV & Cache Locally
-    const cachePath = path.resolve(process.cwd(), "data/google_sheet_cache.csv");
+    const cachePath = path.join(os.tmpdir(), "google_sheet_cache.csv");
     const csvExportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv`;
     let csvContent = "";
 
@@ -372,7 +373,7 @@ export async function POST(req: NextRequest) {
 
     // 3. Pre-flight check: scan for new rows that need syncing
     const newRowsToSync = [];
-    const inventoryDir = path.resolve(process.cwd(), "data/inventory");
+    const inventoryDir = path.join(os.tmpdir(), "inventory");
     if (!fs.existsSync(inventoryDir)) {
       fs.mkdirSync(inventoryDir, { recursive: true });
     }
