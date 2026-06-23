@@ -200,7 +200,7 @@ export async function GET(req: NextRequest) {
       });
 
       const serialNum = item['serialnumber']?.trim();
-      const sku = item['sku']?.trim() || (serialNum ? `RP-SAREE-${serialNum}` : '');
+      const sku = item['sku']?.trim() || (serialNum ? `RP-INV-${serialNum}` : '');
       let title = item['title']?.trim();
       if (serialNum === '28' && !title) {
         title = 'Lavender Starlight Saree';
@@ -386,7 +386,7 @@ export async function POST(req: NextRequest) {
       });
 
       const serialNum = item['serialnumber'];
-      const sku = item['sku'] || `RP-SAREE-${serialNum}`;
+      const sku = item['sku'] || `RP-INV-${serialNum}`;
       let title = item['title'];
       if (serialNum === '28' && !title) {
         title = 'Lavender Starlight Saree';
@@ -799,6 +799,7 @@ export async function POST(req: NextRequest) {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 serialNumber: serialNum,
+                sku: sku,
                 title: cleanTitle,
                 description: sareeDescription,
                 weave: cleanWeave,
