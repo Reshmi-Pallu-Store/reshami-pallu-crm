@@ -39,12 +39,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { text, image, imageBase64Key } = body;
 
-    await db.set("founder:story:text", text || "");
-    await db.set("founder:story:image", image || "");
+    const pipeline = db.pipeline();
+    pipeline.set("founder:story:text", text || "");
+    pipeline.set("founder:story:image", image || "");
+
+    let imageBase64Idx = -1;
+    if (imageBase64Key) {
+      pipeline.get(imageBase64Key);
+      imageBase64Idx = 2; // pipeline has 2 sets before this
+    }
+
+    const results = await pipeline.exec();
 
     // Copy base64 to stable slot so the storefront proxy always has a copy
-    if (imageBase64Key) {
-      const base64Data = await db.get<string>(imageBase64Key);
+    if (imageBase64Idx !== -1) {
+      const base64Data = results[imageBase64Idx] as string | null;
       if (base64Data) {
         const TWO_YEARS = 2 * 365 * 24 * 3600;
         await db.set("brand-image-data:founder", base64Data, { ex: TWO_YEARS });

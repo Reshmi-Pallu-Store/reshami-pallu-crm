@@ -39,29 +39,62 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { heroImage, heroTitle, heroSubtitle, loginImage, heroEnabled, heroImageBase64Key, loginImageBase64Key } = body;
 
-    if (heroImage !== undefined) await db.set("brand:hero:image", heroImage || "");
-    if (heroTitle !== undefined) await db.set("brand:hero:title", heroTitle || "");
-    if (heroSubtitle !== undefined) await db.set("brand:hero:subtitle", heroSubtitle || "");
-    if (loginImage !== undefined) await db.set("brand:login:image", loginImage || "");
-    if (heroEnabled !== undefined) await db.set("brand:hero:enabled", String(heroEnabled));
+    const pipeline = db.pipeline();
 
-    // Copy base64 image data from the temp media key to a stable named slot.
-    // The storefront image proxy reads brand-image-data:hero / brand-image-data:login permanently,
-    // so images remain accessible even if external CDN URLs expire or get deleted.
-    const TWO_YEARS = 2 * 365 * 24 * 3600;
+    if (heroImage !== undefined) pipeline.set("brand:hero:image", heroImage || "");
+    if (heroTitle !== undefined) pipeline.set("brand:hero:title", heroTitle || "");
+    if (heroSubtitle !== undefined) pipeline.set("brand:hero:subtitle", heroSubtitle || "");
+    if (loginImage !== undefined) pipeline.set("brand:login:image", loginImage || "");
+    if (heroEnabled !== undefined) pipeline.set("brand:hero:enabled", String(heroEnabled));
+
+    // Queue GET requests in the same pipeline to save round trips
+    let heroBase64Idx = -1;
+    let loginBase64Idx = -1;
+    let cmdCount = 0;
+
+    if (heroImage !== undefined) cmdCount++;
+    if (heroTitle !== undefined) cmdCount++;
+    if (heroSubtitle !== undefined) cmdCount++;
+    if (loginImage !== undefined) cmdCount++;
+    if (heroEnabled !== undefined) cmdCount++;
+
     if (heroImageBase64Key) {
-      const base64Data = await db.get<string>(heroImageBase64Key);
+      pipeline.get(heroImageBase64Key);
+      heroBase64Idx = cmdCount;
+      cmdCount++;
+    }
+    if (loginImageBase64Key) {
+      pipeline.get(loginImageBase64Key);
+      loginBase64Idx = cmdCount;
+      cmdCount++;
+    }
+
+    const results = await pipeline.exec();
+
+    // Copy base64 image data from the temp media key to a stable named slot if retrieved.
+    const TWO_YEARS = 2 * 365 * 24 * 3600;
+    const writePipeline = db.pipeline();
+    let needsWrite = false;
+
+    if (heroBase64Idx !== -1) {
+      const base64Data = results[heroBase64Idx] as string | null;
       if (base64Data) {
-        await db.set("brand-image-data:hero", base64Data, { ex: TWO_YEARS });
+        writePipeline.set("brand-image-data:hero", base64Data, { ex: TWO_YEARS });
+        needsWrite = true;
         console.log("[Customizer] Copied hero base64 to stable slot brand-image-data:hero");
       }
     }
-    if (loginImageBase64Key) {
-      const base64Data = await db.get<string>(loginImageBase64Key);
+    if (loginBase64Idx !== -1) {
+      const base64Data = results[loginBase64Idx] as string | null;
       if (base64Data) {
-        await db.set("brand-image-data:login", base64Data, { ex: TWO_YEARS });
+        writePipeline.set("brand-image-data:login", base64Data, { ex: TWO_YEARS });
+        needsWrite = true;
         console.log("[Customizer] Copied login base64 to stable slot brand-image-data:login");
       }
+    }
+
+    if (needsWrite) {
+      await writePipeline.exec();
     }
 
     return NextResponse.json({ success: true });
