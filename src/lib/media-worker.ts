@@ -50,9 +50,9 @@ async function pollShopifyFileUrl(fileId: string, maxAttempts = 12): Promise<str
   return null;
 }
 
-export async function processQueueAsync() {
+export function processQueueAsync(): Promise<void> {
   // Trigger asynchronously in non-blocking fashion
-  (async () => {
+  return (async () => {
     const loopLockKey = "lock:media:loop";
     try {
       const loopAcquired = await db.set(loopLockKey, "running", { nx: true, ex: 30 });

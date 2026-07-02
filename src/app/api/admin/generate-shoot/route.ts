@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { promises as fs } from "fs";
 import path from "path";
@@ -325,7 +325,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Trigger background worker once to optimize and upload all to Shopify Files CDN!
-    processQueueAsync();
+    after(processQueueAsync());
 
     return NextResponse.json({
       success: true,

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { cookies } from "next/headers";
 import { promises as fs } from "fs";
 import path from "path";
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     console.log(`[Queue API] Registered media ${mediaId} in Upstash Redis. Triggering async worker...`);
     
     // Trigger the background media optimizer thread (non-blocking!)
-    processQueueAsync();
+    after(processQueueAsync());
 
     // Instantly return the local stream preview details (takes < 150ms!)
     return NextResponse.json({
