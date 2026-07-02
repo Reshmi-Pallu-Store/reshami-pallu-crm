@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
     const heroImage = await db.get<string>("brand:hero:image") || "/images/hero-reshami-pallu.png";
     const heroTitle = await db.get<string>("brand:hero:title") || "BORN TO DAZZLE";
     const heroSubtitle = await db.get<string>("brand:hero:subtitle") || "CRAFTED TO STAND OUT—JUST LIKE YOU.";
-    const heroEnabledRaw = await db.get<string>("brand:hero:enabled");
-    const heroEnabled = heroEnabledRaw === null ? true : heroEnabledRaw === "true";
+    const heroEnabledRaw = await db.get<any>("brand:hero:enabled");
+    const heroEnabled = heroEnabledRaw === null ? true : (heroEnabledRaw === true || heroEnabledRaw === "true");
     const loginImage = await db.get<string>("brand:login:image") || "/images/hero-reshami-pallu.png";
 
     return NextResponse.json({ heroImage, heroTitle, heroSubtitle, loginImage, heroEnabled });
