@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
 
     if (isPlaceholderKey) {
       console.error("❌ [AI Studio API] ERROR: Google Gen AI API key is not configured.");
-      return NextResponse.json({ 
-        error: "Google Gen AI API key is not configured. Please add your GEMINI_API_KEY in desktop/reshami-pallu-crm/.env.local." 
+      return NextResponse.json({
+        error: "Google Gen AI API key is not configured. Please add your GEMINI_API_KEY in desktop/reshami-pallu-crm/.env.local."
       }, { status: 400 });
     }
 
@@ -76,34 +76,58 @@ export async function POST(req: NextRequest) {
             inlineData: { mimeType, data: imageBase64 }
           });
         } catch (err) {
-          // If deleted from disk, fetch from Redis memory key fallback
-          const redisKey = `brand-image-data:${id}`;
-          const redisData = await db.get<string>(redisKey);
-          if (redisData && redisData.includes("base64,")) {
-            const mime = redisData.split(";")[0].split(":")[1] || "image/jpeg";
-            primaryMimeType = mime;
-            const dataBase64 = redisData.split("base64,")[1];
-            if (!primaryImageBase64) primaryImageBase64 = dataBase64;
-            inputParts.push({
-              inlineData: { mimeType: mime, data: dataBase64 }
-            });
+            // If deleted from disk, fetch from Shopify Files CDN first
+            let fetchedFromCdn = false;
+            if (origItem.shopifyUrl) {
+              try {
+                const cdnRes = await fetch(origItem.shopifyUrl);
+                if (cdnRes.ok) {
+                  const cdnBuf = Buffer.from(await cdnRes.arrayBuffer());
+                  const imageBase64 = cdnBuf.toString("base64");
+                  const mime = origItem.mimeType || "image/jpeg";
+                  primaryMimeType = mime;
+                  if (!primaryImageBase64) primaryImageBase64 = imageBase64;
+                  inputParts.push({
+                    inlineData: { mimeType: mime, data: imageBase64 }
+                  });
+                  fetchedFromCdn = true;
+                }
+              } catch (cdnErr) {
+                console.warn(`[AI Shoot API] CDN fetch fallback failed for ${id}:`, cdnErr);
+              }
+            }
+
+            if (!fetchedFromCdn) {
+              // Check transient Redis staging key
+              const tempKey = `temp-upload:${id}`;
+              const legacyKey = `brand-image-data:${id}`;
+              const redisData = (await db.get<string>(tempKey)) || (await db.get<string>(legacyKey));
+              if (redisData && redisData.includes("base64,")) {
+                const mime = redisData.split(";")[0].split(":")[1] || "image/jpeg";
+                primaryMimeType = mime;
+                const dataBase64 = redisData.split("base64,")[1];
+                if (!primaryImageBase64) primaryImageBase64 = dataBase64;
+                inputParts.push({
+                  inlineData: { mimeType: mime, data: dataBase64 }
+                });
+              }
+            }
           }
         }
       }
-    }
 
-    if (inputParts.length === 0) {
-      return NextResponse.json({ error: "Failed to load any of the original Saree files from local disk or Redis memory" }, { status: 404 });
-    }
+      if (inputParts.length === 0) {
+        return NextResponse.json({ error: "Failed to load any of the original Saree files from local disk or Redis memory" }, { status: 404 });
+      }
 
-    let sareeDescription = customPrompt || "";
+      let sareeDescription = customPrompt || "";
 
-    // Phase 1: Call Gemini 2.5 Flash to describe all angles into structured JSON (ONCE)
-    if (!sareeDescription) {
-      const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-      console.log(`⏳ [AI Studio API] Executing Multi-Angle Gemini JSON analysis...`);
-      
-      const jsonPrompt = `
+      // Phase 1: Call Gemini 2.5 Flash to describe all angles into structured JSON (ONCE)
+      if (!sareeDescription) {
+        const geminiUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+        console.log(`⏳ [AI Studio API] Executing Multi-Angle Gemini JSON analysis...`);
+
+        const jsonPrompt = `
         Analyze the uploaded saree photos showing different angles/details of the same saree. 
         Write a highly detailed, extremely precise description of this saree across all angles.
         You MUST return the output as a valid JSON object matching the following structure:
@@ -121,220 +145,228 @@ export async function POST(req: NextRequest) {
         Return ONLY the raw JSON object inside your response content. Do not include markdown code block characters like \`\`\`json.
       `;
 
-      const payload = {
-        contents: [
-          {
-            parts: [
-              { text: jsonPrompt },
-              ...inputParts
-            ]
-          }
-        ]
-      };
-
-      try {
-        const geminiRes = await fetch(geminiUrl, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey
-          },
-          body: JSON.stringify(payload)
-        });
-
-        if (geminiRes.ok) {
-          const geminiData = await geminiRes.json();
-          const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
-          
-          try {
-            let cleanJsonText = rawText.trim();
-            if (cleanJsonText.startsWith("```json")) {
-              cleanJsonText = cleanJsonText.substring(7, cleanJsonText.length - 3).trim();
-            } else if (cleanJsonText.startsWith("```")) {
-              cleanJsonText = cleanJsonText.substring(3, cleanJsonText.length - 3).trim();
+        const payload = {
+          contents: [
+            {
+              parts: [
+                { text: jsonPrompt },
+                ...inputParts
+              ]
             }
-            
-            const parsedJson = JSON.parse(cleanJsonText);
-            console.log("✅ [AI Studio API] Gemini Structured JSON analysis generated successfully:", parsedJson);
-            
-            sareeDescription = `An opulent, flowing ${parsedJson.fabric} saree featuring a base color of ${parsedJson.base_color} accented with ${parsedJson.accent_colors.join(", ")}, intricately detailed with ${parsedJson.motifs} in ${parsedJson.weave_style} style, featuring a gorgeous pallu with ${parsedJson.pallu_design}, finished with a border of ${parsedJson.border_design}. Styled with a matching blouse and recommendation: ${parsedJson.catalog_requirements}.`;
-          } catch (jsonErr) {
-            console.warn("⚠️ Failed to parse Gemini JSON output, falling back to raw text:", rawText);
-            sareeDescription = rawText;
+          ]
+        };
+
+        try {
+          const geminiRes = await fetch(geminiUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (geminiRes.ok) {
+            const geminiData = await geminiRes.json();
+            const rawText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+            try {
+              let cleanJsonText = rawText.trim();
+              if (cleanJsonText.startsWith("```json")) {
+                cleanJsonText = cleanJsonText.substring(7, cleanJsonText.length - 3).trim();
+              } else if (cleanJsonText.startsWith("```")) {
+                cleanJsonText = cleanJsonText.substring(3, cleanJsonText.length - 3).trim();
+              }
+
+              const parsedJson = JSON.parse(cleanJsonText);
+              console.log("✅ [AI Studio API] Gemini Structured JSON analysis generated successfully:", parsedJson);
+
+              sareeDescription = `An opulent, flowing ${parsedJson.fabric} saree featuring a base color of ${parsedJson.base_color} accented with ${parsedJson.accent_colors.join(", ")}, intricately detailed with ${parsedJson.motifs} in ${parsedJson.weave_style} style, featuring a gorgeous pallu with ${parsedJson.pallu_design}, finished with a border of ${parsedJson.border_design}. Styled with a matching blouse and recommendation: ${parsedJson.catalog_requirements}.`;
+            } catch (jsonErr) {
+              console.warn("⚠️ Failed to parse Gemini JSON output, falling back to raw text:", rawText);
+              sareeDescription = rawText;
+            }
+          } else {
+            const errText = await geminiRes.text();
+            console.error(`❌ [AI Studio API] Gemini JSON analysis failed:`, errText);
+            return NextResponse.json({ error: `Gemini JSON analysis failed: ${geminiRes.status} ${errText}` }, { status: 500 });
           }
-        } else {
-          const errText = await geminiRes.text();
-          console.error(`❌ [AI Studio API] Gemini JSON analysis failed:`, errText);
-          return NextResponse.json({ error: `Gemini JSON analysis failed: ${geminiRes.status} ${errText}` }, { status: 500 });
+        } catch (err: any) {
+          console.error("❌ [AI Studio API] Network Exception during Gemini JSON request:", err);
+          return NextResponse.json({ error: `Gemini network request failed: ${err.message}` }, { status: 500 });
         }
-      } catch (err: any) {
-        console.error("❌ [AI Studio API] Network Exception during Gemini JSON request:", err);
-        return NextResponse.json({ error: `Gemini network request failed: ${err.message}` }, { status: 500 });
-      }
-    }
-
-    if (!sareeDescription) {
-      sareeDescription = "A premium handwoven saree with detailed borders and rich fabric textures.";
-    }
-
-    // Phase 2: Call Image Try-on Generation in a loop for each requested pose
-    const generatedItems = [];
-    const uploadDir = path.join(os.tmpdir(), "reshami-pallu-uploads");
-    await fs.mkdir(uploadDir, { recursive: true });
-
-    for (const pose of finalPoses) {
-      console.log(`⏳ [AI Studio API] Generating model image for pose: ${pose}...`);
-      let imagenSuccess = false;
-      let finalImageBase64 = "";
-
-      const poseDetail = POSE_PROMPT_DESCRIPTIONS[pose] || pose;
-
-      // 1. Primary Method: Call their active custom 'gemini-3.1-flash-image' (Nano Banana 2) model!
-      const geminiImageUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`;
-      
-      const geminiImagePayload = {
-        contents: [
-          {
-            parts: [
-              { 
-                text: `Put this exact saree on the same elegant, professional Indian model named Maya, featuring a consistent beautiful face with symmetric facial features and identical soft smile across all shots, with a professional ${modelTone} skin tone, standing in a luxurious ${backgroundVibe} setting. Focus on catalog studio lighting, high resolution, intricate fabric weave textures, complete drape focus, photorealistic. Camera shot and angle instructions: ${poseDetail}. Return the final generated model image directly as an image asset.` 
-              },
-              ...inputParts
-            ]
-          }
-        ]
-      };
-
-      try {
-        const imgRes = await fetch(geminiImageUrl, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "x-goog-api-key": apiKey
-          },
-          body: JSON.stringify(geminiImagePayload)
-        });
-
-        console.log(`- gemini-3.1-flash-image Response Status for ${pose}: ${imgRes.status} ${imgRes.statusText}`);
-
-        if (imgRes.ok) {
-          const imgData = await imgRes.json();
-          const generatedBytes = imgData.candidates?.[0]?.content?.parts?.find(
-            (p: any) => p.inlineData?.data
-          )?.inlineData?.data || imgData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-
-          if (generatedBytes) {
-            finalImageBase64 = generatedBytes;
-            console.log(`✅ [AI Studio API] gemini-3.1-flash-image successfully generated model photo for pose: ${pose}`);
-            imagenSuccess = true;
-          }
-        }
-      } catch (err: any) {
-        console.warn(`⚠️ [AI Studio API] gemini-3.1-flash-image exception for ${pose}:`, err.message);
       }
 
-      // 2. Fallback Method: Loop through standard Imagen models if primary fails
-      if (!imagenSuccess) {
-        console.log(`⏳ [AI Studio API] Falling back to standard Google Imagen for pose: ${pose}...`);
-        
-        const poseDescription = `A specific, professional Indian model named Maya, featuring a highly consistent beautiful face, symmetric facial features, identical soft smile and hairstyle across all angles, with a professional ${modelTone} skin tone, wearing a custom stitched matching blouse, elegantly draped in a saree that matches this description: "${sareeDescription}". She is standing in a luxurious ${backgroundVibe} setting. Camera framing & shot angle: ${poseDetail}. Professional catalog studio lighting, award-winning fashion editorial photography, 8k resolution, photorealistic, intricate fabric weave textures, complete drape focus.`;
-        
-        const imagenModels = ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"];
+      if (!sareeDescription) {
+        sareeDescription = "A premium handwoven saree with detailed borders and rich fabric textures.";
+      }
 
-        for (const modelName of imagenModels) {
-          const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${apiKey}`;
-          console.log(`⏳ [AI Studio API] Attempting imagen generation with model: ${modelName} for pose: ${pose}...`);
+      // Phase 2: Call Image Try-on Generation in a loop for each requested pose
+      const generatedItems = [];
+      const uploadDir = path.join(os.tmpdir(), "reshami-pallu-uploads");
+      await fs.mkdir(uploadDir, { recursive: true });
 
-          const imagenPayload = {
-            instances: [
-              {
-                prompt: poseDescription,
-                imagePrompt: {
-                  image: {
-                    imageBytes: primaryImageBase64
+      for (const pose of finalPoses) {
+        console.log(`⏳ [AI Studio API] Generating model image for pose: ${pose}...`);
+        let imagenSuccess = false;
+        let finalImageBase64 = "";
+
+        const poseDetail = POSE_PROMPT_DESCRIPTIONS[pose] || pose;
+
+        // 1. Primary Method: Call their active custom 'gemini-3.1-flash-image' (Nano Banana 2) model!
+        const geminiImageUrl = `https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-image:generateContent?key=${apiKey}`;
+
+        const geminiImagePayload = {
+          contents: [
+            {
+              parts: [
+                {
+                  text: `Put this exact saree on the same elegant, professional Indian model named Maya, featuring a consistent beautiful face with symmetric facial features and identical soft smile across all shots, with a professional ${modelTone} skin tone, standing in a luxurious ${backgroundVibe} setting. Focus on catalog studio lighting, high resolution, intricate fabric weave textures, complete drape focus, photorealistic. Camera shot and angle instructions: ${poseDetail}. Return the final generated model image directly as an image asset.`
+                },
+                ...inputParts
+              ]
+            }
+          ]
+        };
+
+        try {
+          const imgRes = await fetch(geminiImageUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": apiKey
+            },
+            body: JSON.stringify(geminiImagePayload)
+          });
+
+          console.log(`- gemini-3.1-flash-image Response Status for ${pose}: ${imgRes.status} ${imgRes.statusText}`);
+
+          if (imgRes.ok) {
+            const imgData = await imgRes.json();
+            const generatedBytes = imgData.candidates?.[0]?.content?.parts?.find(
+              (p: any) => p.inlineData?.data
+            )?.inlineData?.data || imgData.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+
+            if (generatedBytes) {
+              finalImageBase64 = generatedBytes;
+              console.log(`✅ [AI Studio API] gemini-3.1-flash-image successfully generated model photo for pose: ${pose}`);
+              imagenSuccess = true;
+            }
+          }
+        } catch (err: any) {
+          console.warn(`⚠️ [AI Studio API] gemini-3.1-flash-image exception for ${pose}:`, err.message);
+        }
+
+        // 2. Fallback Method: Loop through standard Imagen models if primary fails
+        if (!imagenSuccess) {
+          console.log(`⏳ [AI Studio API] Falling back to standard Google Imagen for pose: ${pose}...`);
+
+          const poseDescription = `A specific, professional Indian model named Maya, featuring a highly consistent beautiful face, symmetric facial features, identical soft smile and hairstyle across all angles, with a professional ${modelTone} skin tone, wearing a custom stitched matching blouse, elegantly draped in a saree that matches this description: "${sareeDescription}". She is standing in a luxurious ${backgroundVibe} setting. Camera framing & shot angle: ${poseDetail}. Professional catalog studio lighting, award-winning fashion editorial photography, 8k resolution, photorealistic, intricate fabric weave textures, complete drape focus.`;
+
+          const imagenModels = ["imagen-4.0-generate-001", "imagen-4.0-fast-generate-001"];
+
+          for (const modelName of imagenModels) {
+            const imagenUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:predict?key=${apiKey}`;
+            console.log(`⏳ [AI Studio API] Attempting imagen generation with model: ${modelName} for pose: ${pose}...`);
+
+            const imagenPayload = {
+              instances: [
+                {
+                  prompt: poseDescription,
+                  imagePrompt: {
+                    image: {
+                      imageBytes: primaryImageBase64
+                    }
                   }
                 }
+              ],
+              parameters: {
+                sampleCount: 1,
+                outputMimeType: "image/jpeg",
+                aspectRatio: "3:4"
               }
-            ],
-            parameters: {
-              sampleCount: 1,
-              outputMimeType: "image/jpeg",
-              aspectRatio: "3:4"
-            }
-          };
+            };
 
-          try {
-            const imagenRes = await fetch(imagenUrl, {
-              method: "POST",
-              headers: { 
-                "Content-Type": "application/json",
-                "x-goog-api-key": apiKey
-              },
-              body: JSON.stringify(imagenPayload)
-            });
+            try {
+              const imagenRes = await fetch(imagenUrl, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": apiKey
+                },
+                body: JSON.stringify(imagenPayload)
+              });
 
-            if (imagenRes.ok) {
-              const imagenData = await imagenRes.json();
-              const generatedBytes = imagenData.predictions?.[0]?.bytesBase64Encoded || imagenData.generatedImages?.[0]?.image?.imageBytes;
-              if (generatedBytes) {
-                finalImageBase64 = generatedBytes;
-                console.log(`✅ [AI Studio API] ${modelName} successfully generated model photo for pose: ${pose}`);
-                imagenSuccess = true;
-                break;
+              if (imagenRes.ok) {
+                const imagenData = await imagenRes.json();
+                const generatedBytes = imagenData.predictions?.[0]?.bytesBase64Encoded || imagenData.generatedImages?.[0]?.image?.imageBytes;
+                if (generatedBytes) {
+                  finalImageBase64 = generatedBytes;
+                  console.log(`✅ [AI Studio API] ${modelName} successfully generated model photo for pose: ${pose}`);
+                  imagenSuccess = true;
+                  break;
+                }
               }
+            } catch (err: any) {
+              console.warn(`⚠️ [AI Studio API] Model ${modelName} fallback exception for ${pose}:`, err.message);
             }
-          } catch (err: any) {
-            console.warn(`⚠️ [AI Studio API] Model ${modelName} fallback exception for ${pose}:`, err.message);
           }
         }
+
+        if (!imagenSuccess) {
+          console.error(`❌ [AI Studio API] All Saree try-on models failed for pose: ${pose}`);
+          continue; // Try next pose instead of failing entirely
+        }
+
+        // 3. Register the new generated image in the local OS temp disk and media queue
+        const generatedMediaId = "media_ai_" + Math.random().toString(36).substring(2, 11);
+        const absolutePath = path.join(uploadDir, `${generatedMediaId}.jpg`);
+        const finalBuffer = Buffer.from(finalImageBase64, "base64");
+        await fs.writeFile(absolutePath, finalBuffer);
+
+        // Save transient staging buffer in Redis with 1-hour TTL (ex: 3600) so worker has access
+        // across serverless instances, and self-cleans automatically after 1 hour.
+        try {
+          await db.set(`temp-upload:${generatedMediaId}`, `data:image/jpeg;base64,${finalImageBase64}`, { ex: 3600 });
+        } catch (cacheErr) {
+          console.warn(`[AI Studio API] Non-fatal: could not store transient Redis backup for ${generatedMediaId}:`, cacheErr);
+        }
+
+        // Save metadata in Upstash Redis media queue
+        const queueItem = {
+          id: generatedMediaId,
+          path: absolutePath,
+          status: "queued",
+          type: "image",
+          originalName: `ai_model_${modelTone.replace(/\s+/g, '_')}_${pose.replace(/\s+/g, '_')}_${backgroundVibe.replace(/\s+/g, '_')}.jpg`,
+          mimeType: "image/jpeg",
+          createdAt: new Date().toISOString()
+        };
+        await db.hset("media:queue", { [generatedMediaId]: JSON.stringify(queueItem) });
+
+        console.log(`[AI Studio API] Generated AI model ${generatedMediaId} for pose ${pose} queued in Redis.`);
+
+        generatedItems.push({
+          id: generatedMediaId,
+          url: `/api/upload/preview?id=${generatedMediaId}`
+        });
       }
 
-      if (!imagenSuccess) {
-        console.error(`❌ [AI Studio API] All Saree try-on models failed for pose: ${pose}`);
-        continue; // Try next pose instead of failing entirely
+      if (generatedItems.length === 0) {
+        return NextResponse.json({ error: "All AI try-on models failed to generate any draped images." }, { status: 500 });
       }
 
-      // 3. Register the new generated image in the local OS temp disk and media queue
-      const generatedMediaId = "media_ai_" + Math.random().toString(36).substring(2, 11);
-      const absolutePath = path.join(uploadDir, `${generatedMediaId}.jpg`);
-      const finalBuffer = Buffer.from(finalImageBase64, "base64");
-      await fs.writeFile(absolutePath, finalBuffer);
+      // Trigger background worker once to optimize and upload all to Shopify Files CDN!
+      after(processQueueAsync());
 
-      // Save metadata in Upstash Redis media queue
-      const queueItem = {
-        id: generatedMediaId,
-        path: absolutePath,
-        status: "queued",
-        type: "image",
-        originalName: `ai_model_${modelTone.replace(/\s+/g, '_')}_${pose.replace(/\s+/g, '_')}_${backgroundVibe.replace(/\s+/g, '_')}.jpg`,
-        mimeType: "image/jpeg",
-        createdAt: new Date().toISOString()
-      };
-      await db.hset("media:queue", { [generatedMediaId]: JSON.stringify(queueItem) });
-
-      console.log(`[AI Studio API] Generated AI model ${generatedMediaId} for pose ${pose} queued in Redis.`);
-      
-      generatedItems.push({
-        id: generatedMediaId,
-        url: `/api/upload/preview?id=${generatedMediaId}`
+      return NextResponse.json({
+        success: true,
+        items: generatedItems,
+        description: sareeDescription
       });
+
+    } catch (err: any) {
+      console.error("AI Generation Endpoint Error:", err);
+      return NextResponse.json({ error: err.message || "AI pipeline execution failure" }, { status: 500 });
     }
-
-    if (generatedItems.length === 0) {
-      return NextResponse.json({ error: "All AI try-on models failed to generate any draped images." }, { status: 500 });
-    }
-
-    // Trigger background worker once to optimize and upload all to Shopify Files CDN!
-    after(processQueueAsync());
-
-    return NextResponse.json({
-      success: true,
-      items: generatedItems,
-      description: sareeDescription
-    });
-
-  } catch (err: any) {
-    console.error("AI Generation Endpoint Error:", err);
-    return NextResponse.json({ error: err.message || "AI pipeline execution failure" }, { status: 500 });
   }
-}

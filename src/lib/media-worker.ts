@@ -65,7 +65,7 @@ export function processQueueAsync(): Promise<void> {
         const queue = await db.hgetall("media:queue");
         if (!queue) return;
 
-        const items = Object.values(queue).map((val: any) => 
+        const items = Object.values(queue).map((val: any) =>
           typeof val === "string" ? JSON.parse(val) : val
         );
 
@@ -92,8 +92,9 @@ export function processQueueAsync(): Promise<void> {
             await fs.access(absoluteRawPath);
           } catch {
             console.warn(`[Media Worker] Source file missing on disk: ${absoluteRawPath}. Checking Redis fallback...`);
-            const base64Key = `brand-image-data:${item.id}`;
-            const redisData = await redis.get<string>(base64Key);
+            const tempKey = `temp-upload:${item.id}`;
+            const legacyKey = `brand-image-data:${item.id}`;
+            const redisData = (await redis.get<string>(tempKey)) || (await redis.get<string>(legacyKey));
             if (redisData && redisData.includes("base64,")) {
               console.log(`[Media Worker] Found base64 backup in Redis for ${item.id}. Re-creating local temp file...`);
               const base64Data = redisData.split("base64,")[1];
@@ -117,7 +118,7 @@ export function processQueueAsync(): Promise<void> {
           let ext = item.type === "image" ? ".jpg" : ".mp4";
           const dir = path.dirname(absoluteRawPath);
           const filename = path.basename(absoluteRawPath);
-          
+
           let optimizedFilename = filename.replace(/\.[^/.]+$/, "") + "_optimized" + ext;
           let absoluteOptimizedPath = path.join(dir, optimizedFilename);
           let isFallbackCopy = false;
@@ -180,7 +181,7 @@ export function processQueueAsync(): Promise<void> {
             // 3. Upload Optimized file to Shopify Files (registered via fileCreate)
             const fileBuffer = await fs.readFile(absoluteOptimizedPath);
             const fileName = `${item.id}${ext}`;
-            
+
             let mimeType = item.type === "image" ? "image/jpeg" : "video/mp4";
             if (isFallbackCopy) {
               if (ext === ".png") mimeType = "image/png";
@@ -206,51 +207,70 @@ export function processQueueAsync(): Promise<void> {
               }
             }
 
-            // Store base64 copy in Redis as permanent fallback (immune to CDN URL expiry)
-            if (item.type === "image") {
-              const base64Data = fileBuffer.toString("base64");
-              const base64Key = `brand-image-data:${item.id}`;
-              await redis.set(base64Key, `data:${mimeType};base64,${base64Data}`, { ex: 365 * 24 * 3600 });
-              console.log(`[Media Worker] Base64 fallback stored in Redis under ${base64Key}`);
+              // Immediately delete transient Redis staging keys to prevent Redis storage accumulation
+              try {
+                await redis.del(`temp-upload:${item.id}`, `brand-image-data:${item.id}`);
+              } catch (delErr) {
+                console.warn(`[Media Worker] Non-fatal error deleting transient Redis key for ${item.id}:`, delErr);
+              }
+
+              // 4. Mark status as completed with permanent Shopify CDN URL
+              const completedItem = {
+                ...item,
+                status: "completed",
+                shopifyId: result.id,
+                shopifyUrl: permanentUrl,
+                optimizedPath: absoluteOptimizedPath,
+                completedAt: new Date().toISOString()
+              };
+              await db.hset("media:queue", { [item.id]: JSON.stringify(completedItem) });
+              console.log(`[Media Worker] Item ${item.id} successfully synced to Shopify Files CDN: ${permanentUrl}`);
+
+              // 5. Clean up temporary files on local disk
+              try {
+                await fs.unlink(absoluteRawPath);
+                await fs.unlink(absoluteOptimizedPath);
+              } catch (unlinkErr) {
+                console.error("[Media Worker] Disk cleanup warning:", unlinkErr);
+              }
+
+            } catch (err: any) {
+              console.error(`[Media Worker] Process failed for item ${item.id}:`, err);
+              const failedItem = {
+                ...item,
+                status: "failed",
+                error: err.message || "Transformation failed",
+                failedAt: new Date().toISOString()
+              };
+              await db.hset("media:queue", { [item.id]: JSON.stringify(failedItem) });
             }
-
-            // 4. Mark status as completed with permanent URL
-            const completedItem = {
-              ...item,
-              status: "completed",
-              shopifyId: result.id,
-              shopifyUrl: permanentUrl,
-              base64Key: item.type === "image" ? `brand-image-data:${item.id}` : undefined,
-              optimizedPath: absoluteOptimizedPath,
-              completedAt: new Date().toISOString()
-            };
-            await db.hset("media:queue", { [item.id]: JSON.stringify(completedItem) });
-            console.log(`[Media Worker] Item ${item.id} successfully synced to Shopify!`);
-
-            // 5. Clean up temporary files on local disk
-            try {
-              await fs.unlink(absoluteRawPath);
-              await fs.unlink(absoluteOptimizedPath);
-            } catch (unlinkErr) {
-              console.error("[Media Worker] Disk cleanup warning:", unlinkErr);
-            }
-
-          } catch (err: any) {
-            console.error(`[Media Worker] Process failed for item ${item.id}:`, err);
-            const failedItem = {
-              ...item,
-              status: "failed",
-              error: err.message || "Transformation failed",
-              failedAt: new Date().toISOString()
-            };
-            await db.hset("media:queue", { [item.id]: JSON.stringify(failedItem) });
           }
+
+        // Clean up completed or failed items older than 24 hours from media:queue
+        try {
+            const now = Date.now();
+            const ONE_DAY_MS = 24 * 3600 * 1000;
+            const staleIds: string[] = [];
+            for (const item of items) {
+              if (item && (item.status === "completed" || item.status === "failed")) {
+                const itemTime = new Date(item.completedAt || item.failedAt || item.createdAt || 0).getTime();
+                if (now - itemTime > ONE_DAY_MS) {
+                  staleIds.push(item.id);
+                }
+              }
+            }
+            if (staleIds.length > 0) {
+              await db.hdel("media:queue", ...staleIds);
+              console.log(`[Media Worker] Pruned ${staleIds.length} stale items from media:queue.`);
+            }
+          } catch (pruneErr) {
+            console.warn("[Media Worker] Non-fatal error pruning media:queue:", pruneErr);
+          }
+        } finally {
+          await db.del(loopLockKey);
         }
-      } finally {
-        await db.del(loopLockKey);
+      } catch (err) {
+        console.error("[Media Worker] Queue loop execution failure:", err);
       }
-    } catch (err) {
-      console.error("[Media Worker] Queue loop execution failure:", err);
-    }
-  })();
-}
+    }) ();
+  }

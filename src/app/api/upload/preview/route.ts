@@ -31,6 +31,22 @@ export async function GET(req: NextRequest) {
         },
       });
     } catch (e) {
+      // If already uploaded to Shopify Files CDN, redirect directly
+      if (item.shopifyUrl) {
+        return Response.redirect(item.shopifyUrl, 302);
+      }
+      // Check transient Redis staging key
+      const tempKey = `temp-upload:${id}`;
+      const redisData = await db.get<string>(tempKey);
+      if (redisData && redisData.includes("base64,")) {
+        const base64 = redisData.split("base64,")[1];
+        const buf = Buffer.from(base64, "base64");
+        return new Response(buf, {
+          headers: {
+            "Content-Type": item.mimeType || "image/jpeg",
+          },
+        });
+      }
       return new Response("Local file not found on disk", { status: 404 });
     }
   } catch (err: any) {

@@ -57,6 +57,16 @@ export async function POST(req: NextRequest) {
     const absolutePath = path.join(uploadDir, `${mediaId}${ext}`);
     await fs.writeFile(absolutePath, buffer);
 
+    // Save transient backup in Redis with 1-hour TTL (ex: 3600) so background workers can access
+    // the image even if /tmp is ephemeral across serverless instances. Automatically self-cleans.
+    if (mimeType.startsWith("image/")) {
+      try {
+        await db.set(`temp-upload:${mediaId}`, `data:${mimeType};base64,${buffer.toString("base64")}`, { ex: 3600 });
+      } catch (cacheErr) {
+        console.warn(`[Upload API] Non-fatal: could not store transient Redis backup for ${mediaId}:`, cacheErr);
+      }
+    }
+
     // Register queue metadata inside Upstash Redis hash
     const queueItem = {
       id: mediaId,
