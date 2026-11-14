@@ -14,7 +14,9 @@ import {
   Truck,
   MoreVertical,
   Download,
-  Pencil
+  Pencil,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import OrderDetailModal from "./OrderDetailModal";
 
@@ -47,6 +49,7 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
   const [pickupError, setPickupError] = useState<string | null>(null);
   const [pickupSuccess, setPickupSuccess] = useState<string | null>(null);
   const [showScheduler, setShowScheduler] = useState(false);
+  const [isLogisticsExpanded, setIsLogisticsExpanded] = useState(false);
 
   const [availableDays, setAvailableDays] = useState<Array<{ date: string, label: string, slots: Array<{ value: string, label: string }> }>>([]);
   const [loadingSlots, setLoadingSlots] = useState(true);
@@ -560,28 +563,68 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
 
       {/* Daily Logistics Pickup Coordinator Panel */}
       {(unfulfilledOrders.length > 0 || scheduledPickups.filter((sp: any) => !inTransitPickups[sp.id]).length > 0) && (
-        <div className="bg-white border border-[#4A154B]/10 rounded-2xl p-5 shadow-sm space-y-5">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b border-[#4A154B]/5 pb-3">
+        <div className={`bg-white border border-[#4A154B]/10 rounded-2xl p-5 shadow-sm transition-all ${isLogisticsExpanded ? "space-y-5" : ""}`}>
+          <div 
+            onClick={() => setIsLogisticsExpanded(!isLogisticsExpanded)}
+            className={`flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 cursor-pointer select-none transition-colors ${
+              isLogisticsExpanded ? "border-b border-[#4A154B]/5 pb-3" : ""
+            }`}
+          >
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-[#4A154B]/5 text-[#4A154B]">
                 <Truck size={18} className="text-[#D4AF37]" />
               </div>
-              <div>
+              <div className="flex items-center gap-2 flex-wrap">
                 <h4 className="font-bold text-sm text-[#4A154B]">
                   Logistics & Pickups Coordinator
                 </h4>
+                {unfulfilledOrders.length > 0 && (
+                  <span className="text-[10px] bg-amber-50 text-amber-700 font-bold px-2 py-0.5 rounded-full border border-amber-200">
+                    {unfulfilledOrders.length} to fulfill
+                  </span>
+                )}
+                {scheduledPickups.filter((sp: any) => !inTransitPickups[sp.id]).length > 0 && (
+                  <span className="text-[10px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                    {scheduledPickups.filter((sp: any) => !inTransitPickups[sp.id]).length} active pickup{scheduledPickups.filter((sp: any) => !inTransitPickups[sp.id]).length > 1 ? "s" : ""}
+                  </span>
+                )}
               </div>
             </div>
           
-          {scheduledPickups.length > 0 && unfulfilledOrders.length > 0 && (
-            <button
-              onClick={() => setShowScheduler(!showScheduler)}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#4A154B]/5 text-[#4A154B] hover:bg-[#4A154B]/10 transition-all cursor-pointer"
-            >
-              {showScheduler ? "Hide Scheduler" : "Schedule Another Pickup"}
-            </button>
-          )}
-        </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-end">
+              {isLogisticsExpanded && scheduledPickups.length > 0 && unfulfilledOrders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowScheduler(!showScheduler);
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase tracking-wider bg-[#4A154B]/5 text-[#4A154B] hover:bg-[#4A154B]/10 transition-all cursor-pointer"
+                >
+                  {showScheduler ? "Hide Scheduler" : "Schedule Another Pickup"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLogisticsExpanded(!isLogisticsExpanded);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#4A154B] bg-[#4A154B]/5 hover:bg-[#4A154B]/10 transition-all cursor-pointer border border-[#4A154B]/10"
+                aria-label={isLogisticsExpanded ? "Collapse section" : "Expand section"}
+              >
+                <span>{isLogisticsExpanded ? "Collapse" : "Expand"}</span>
+                {isLogisticsExpanded ? (
+                  <ChevronUp size={14} className="text-[#4A154B]" />
+                ) : (
+                  <ChevronDown size={14} className="text-[#4A154B]" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {isLogisticsExpanded && (
+            <>
 
         {/* List of active scheduled pickups with cancellation options directly inside Coordinator Panel */}
         {scheduledPickups.filter((sp: any) => !inTransitPickups[sp.id]).length > 0 && (
@@ -1101,7 +1144,8 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
           </div>
         )}
 
-
+            </>
+          )}
         </div>
       )}
 
@@ -1111,13 +1155,12 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
         <div className="hidden md:block overflow-hidden">
           <table className="w-full text-left border-collapse table-fixed">
             <colgroup>
-              <col className="w-[8%]" />
-              <col className="w-[10%]" />
-              <col className="w-[20%]" />
-              <col className="w-[10%]" />
+              <col className="w-[9%]" />
               <col className="w-[12%]" />
-              <col className="w-[20%]" />
+              <col className="w-[24%]" />
               <col className="w-[12%]" />
+              <col className="w-[15%]" />
+              <col className="w-[20%]" />
               <col className="w-[8%]" />
             </colgroup>
             <thead>
@@ -1128,14 +1171,13 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
                 <th className="py-4 px-4 text-center">Order Amount</th>
                 <th className="py-4 px-4 text-center">Fulfillment Status</th>
                 <th className="py-4 px-4 text-center">Tracking ID</th>
-                <th className="py-4 px-4 text-center">ETA</th>
                 <th className="py-4 px-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#4A154B]/5 text-sm">
               {filteredOrders.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-[#1A1A1A]/40 font-medium">
+                  <td colSpan={7} className="py-12 text-center text-[#1A1A1A]/40 font-medium">
                     <Package size={32} className="mx-auto mb-2 opacity-30" />
                     No customer orders found matching your search.
                   </td>
@@ -1265,49 +1307,6 @@ function OrdersListTableContent({ initialOrders, metaMap }: OrdersListTableProps
 
 // Inline lazy-loaded dynamic tracking status component
 import { useEffect as reactUseEffect } from "react";
-function OrderEtaCell({ awb, courier, isManualFulfillment }: { awb: string, courier?: string, isManualFulfillment?: boolean }) {
-  const [edd, setEdd] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  reactUseEffect(() => {
-    let active = true;
-    fetch(`/api/orders/track?awb=${encodeURIComponent(awb)}&courier=${encodeURIComponent(courier || "")}&isManual=${!!isManualFulfillment}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (active && data?.ok && data?.tracking?.status) {
-          setEdd(data.tracking.edd);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [awb, courier, isManualFulfillment]);
-
-  const formatEdd = (eddString: string | null) => {
-    if (!eddString) return "-";
-    let cleaned = eddString.replace(/(,\s*|\s+)(evening|morning|afternoon)/i, "").trim();
-    const dateObj = new Date(cleaned);
-    if (!isNaN(dateObj.getTime())) {
-      const dayName = dateObj.toLocaleDateString("en-IN", { weekday: "short" });
-      const dateText = dateObj.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-      return `${dateText} (${dayName})`;
-    }
-    return eddString;
-  };
-
-  return (
-    <td className="py-3.5 px-4 text-center">
-      {loading ? <span className="text-xs text-[#1A1A1A]/40 animate-pulse">Fetching...</span>
-      : !edd ? <span className="text-xs text-gray-400">-</span>
-      : <span className="text-xs text-blue-700 font-semibold">{formatEdd(edd)}</span>}
-    </td>
-  );
-}
 
 function LogisticsStatusBadge({ order, awb, courier, isManualFulfillment, tdClassName }: { order: any, awb: string, courier?: string, isManualFulfillment?: boolean, tdClassName?: string }) {
   const [status, setStatus] = useState<string | null>(null);
@@ -1552,11 +1551,6 @@ function MainOrderTableRow({
           </div>
         )}
       </td>
-      {awb ? (
-        <OrderEtaCell awb={awb} courier={courier} isManualFulfillment={isManualFulfillment} />
-      ) : (
-        <td className="py-3.5 px-4 text-center text-gray-400 text-xs">-</td>
-      )}
 
       <td className="py-3.5 px-4 text-center relative" onClick={(e) => e.stopPropagation()}>
         <div ref={dropdownRef} className="relative inline-block">
